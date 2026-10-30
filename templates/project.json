@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "project": {
+    "name": "",
+    "stage": "discovery",
+    "integration_branch": null,
+    "tracker": {
+      "kind": "gitea",
+      "repository": null
+    }
+  },
+  "apps": [],
+  "decisions": {
+    "tech_stack": null,
+    "architecture": null
+  },
+  "worktree": {
+    "strategy": "native-first",
+    "fallback": ".local/agent/worktrees"
+  },
+  "figma": {
+    "references": [],
+    "status": "unverified"
+  },
+  "delivery": {
+    "provider": "drone",
+    "trigger": "tag",
+    "status": "unverified",
+    "evidence": null
+  },
+  "permissions": {
+    "push_task_branch": false,
+    "create_pr": false,
+    "write_issue": false,
+    "merge": false,
+    "push_tag": false,
+    "deploy": false
+  },
+  "environment": {
+    "test": "unconfigured",
+    "secrets": "external-controlled-storage"
+  },
+  "knowledge": {
+    "directory": "docs/knowledge",
+    "reports": ".local/agent/retros",
+    "schedule_enabled": false
+  }
+}

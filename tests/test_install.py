@@ -1,0 +1,137 @@
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+REPO = Path(__file__).resolve().parents[1]
+CLI = REPO / "scripts/pda.py"
+
+
+class InstallTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def run_cli(self, *args, ok=True):
+        result = subprocess.run(
+            [sys.executable, str(CLI), *args, "--project", str(self.root)],
+            capture_output=True, text=True,
+        )
+        if ok:
+            self.assertEqual(result.returncode, 0, result.stderr)
+        else:
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+        return result
+
+    def snapshot(self):
+        return {str(p.relative_to(self.root)): p.read_bytes()
+                for p in self.root.rglob("*") if p.is_file()}
+
+    def test_preview_is_read_only(self):
+        result = self.run_cli("init")
+        self.assertIn("AGENTS.md", result.stdout)
+        self.assertIn("+", result.stdout)
+        self.assertEqual(self.snapshot(), {})
+
+    def test_install_repeat_and_recover_preserves_existing_files(self):
+        original = b"# Existing rules\r\nKeep all business constraints.\r\n"
+        (self.root / "AGENTS.md").write_bytes(original)
+        (self.root / "AGENTS.md").chmod(0o640)
+        (self.root / ".gitignore").write_bytes(b"build/\n")
+        (self.root / ".mcp.json").write_bytes(b'{"keep":"untouched"}')
+        before = self.snapshot()
+        self.run_cli("init", "--apply")
+        self.assertTrue((self.root / "AGENTS.md").read_bytes().startswith(original))
+        self.assertEqual((self.root / "AGENTS.md").stat().st_mode & 0o777, 0o640)
+        self.assertTrue((self.root / ".agents/skills/personal-dev/SKILL.md").is_file())
+        after = self.snapshot()
+        self.run_cli("init", "--apply")
+        self.assertEqual(self.snapshot(), after)
+        self.run_cli("recover", "--apply")
+        actual = {p: v for p, v in self.snapshot().items() if not p.startswith(".local/")}
+        self.assertEqual(actual, before)
+
+    def test_user_config_and_outside_block_edits_survive_repeat(self):
+        self.run_cli("init", "--apply")
+        config = self.root / "docs/agents/project.json"
+        value = json.loads(config.read_text())
+        value["project"]["integration_branch"] = "release-current"
+        config.write_text(json.dumps(value))
+        agents = self.root / "AGENTS.md"
+        agents.write_text("My new rules\n" + agents.read_text())
+        self.run_cli("init", "--apply")
+        self.assertEqual(json.loads(config.read_text()), value)
+        self.assertTrue(agents.read_text().startswith("My new rules\n"))
+
+    def test_modified_owned_file_blocks_every_write(self):
+        self.run_cli("init", "--apply")
+        skill = self.root / ".agents/skills/personal-dev/SKILL.md"
+        skill.write_text("user customization")
+        before = self.snapshot()
+        result = self.run_cli("init", "--apply", ok=False)
+        self.assertIn("conflict", result.stderr.lower())
+        self.assertEqual(self.snapshot(), before)
+
+    def test_unowned_collision_is_not_adopted(self):
+        target = self.root / ".cursor/rules/personal-dev.mdc"
+        target.parent.mkdir(parents=True)
+        target.write_text("user rule")
+        before = self.snapshot()
+        self.run_cli("init", "--apply", ok=False)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_recovery_refuses_post_install_edits(self):
+        self.run_cli("init", "--apply")
+        agents = self.root / "AGENTS.md"
+        agents.write_text(agents.read_text() + "\nnew user edit\n")
+        before = self.snapshot()
+        self.run_cli("recover", "--apply", ok=False)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_symlink_target_is_rejected(self):
+        with tempfile.TemporaryDirectory() as outside:
+            (self.root / ".agents").symlink_to(outside, target_is_directory=True)
+            self.run_cli("init", "--apply", ok=False)
+            self.assertEqual(list(Path(outside).iterdir()), [])
+
+    def test_malformed_config_and_markers_are_rejected(self):
+        path = self.root / "docs/agents/project.json"
+        path.parent.mkdir(parents=True)
+        path.write_text('{"schema_version":999}')
+        before = self.snapshot()
+        self.run_cli("init", "--apply", ok=False)
+        self.assertEqual(self.snapshot(), before)
+        path.unlink()
+        (self.root / "AGENTS.md").write_text("<!-- personal-dev:begin -->\nunclosed")
+        self.run_cli("init", "--apply", ok=False)
+
+    def test_doctor_is_read_only_and_honest_about_connections(self):
+        before = self.snapshot()
+        result = self.run_cli("doctor")
+        report = json.loads(result.stdout)
+        self.assertEqual(report["external_connections"], "not_checked")
+        self.assertEqual(report["installation"], "absent")
+        self.assertEqual(self.snapshot(), before)
+        self.run_cli("init", "--apply")
+        report = json.loads(self.run_cli("doctor").stdout)
+        self.assertEqual(report["installation"], "present")
+        self.assertEqual(report["host_behavior"], "not_verified")
+
+    def test_placeholder_readme_is_not_a_confirmed_stack_decision(self):
+        (self.root / "README.md").write_text("# New project\n")
+        report = json.loads(self.run_cli("doctor").stdout)
+        self.assertIn("tech_stack_decision", report["missing_project_inputs"])
+        self.run_cli("init", "--apply")
+        config = json.loads((self.root / "docs/agents/project.json").read_text())
+        self.assertIsNone(config["decisions"]["tech_stack"])
+        self.assertEqual(config["project"]["stage"], "discovery")
+
+
+if __name__ == "__main__":
+    unittest.main()

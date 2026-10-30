@@ -1,0 +1,1 @@
+"""Local installer implementation."""

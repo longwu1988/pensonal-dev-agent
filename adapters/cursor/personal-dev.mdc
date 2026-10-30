@@ -1,0 +1,6 @@
+---
+description: 个人开发体系的工程任务入口
+alwaysApply: true
+---
+
+工程建设、需求开发、Bug 修复或交付时，先读根 AGENTS.md，再读取工程根目录的 .agents/skills/personal-dev/SKILL.md 进行任务分级。仅咨询概念时直接回答。业务约束仍按目标目录的 AGENTS.md 查阅。

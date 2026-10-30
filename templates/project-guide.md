@@ -1,0 +1,15 @@
+# 工程接入配置
+
+`project.json` 是工程自行维护的输入；安装器升级保留它。路径以工程根目录为基准，未知值用 null 或空列表，不能把未知写成验证通过。
+
+- `project`：项目名称、discovery/existing 阶段、集成分支、工单仓库；分支不会默认取当前任务分支。
+- `apps`：每项提供 name、path、rules 与 validation。validation 是命令/环境说明列表，安装器不会执行。
+- `decisions`：已确认技术栈与架构决策的文档路径；新工程在开发前确认，既有工程先沿用。
+- `worktree`：优先原生机制，fallback 为工程约定的隔离目录；数据库与端口另行隔离。
+- `figma`：具体文件/节点引用与状态；配置存在不代表授权或连接成功。
+- `delivery`：Drone + Tag；status 可为 unverified 或 user-confirmed，evidence 记录用户确认依据。用户确认已完成时不安排重复核查；每次实际打包仍检查结果。
+- `permissions`：仅记录工程事先授予的动作范围，true 必须有用户授权依据；不覆盖宿主限制和当前会话指令。默认 false，已有任务明确授权不重复询问。
+- `environment`：记录测试环境条件和外部密钥来源说明，禁止填写凭据值；生产/测试隔离。
+- `knowledge`：审核后知识与本地报告位置。本版未提供自动调度，schedule_enabled 必须为 false。
+
+各端专用规范继续保留在原位置。任务从工程根目录的 `.agents/skills/personal-dev/SKILL.md` 进入，按需读取其 references。复用上游前核对 `personal-dev.dependencies.json` 中来源；doctor 只检查本地存在与候选入口摘要，不证明完整依赖、宿主调用或远端连接可用。

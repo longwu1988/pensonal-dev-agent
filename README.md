@@ -4,13 +4,15 @@
 
 ## 当前状态
 
-仓库处于设计基线阶段：已整理开发体系的第一版需求、架构和分阶段交付条件；运行能力尚未实现。
+仓库处于最小接入试验阶段：已提供本地安装器、个人任务入口和分层流程。尚未发布稳定版本，真实业务场景及两端会话验收仍待完成。
 
 - 首个试点工程：`zkxw`。
 - 第一版目标工具：Codex、Cursor；Claude 暂不纳入实施和验收。两端适配均待验证。
-- 尚未发布可安装的 Skill、Agent 配置、初始化工具或版本。
-- 目前不能通过 `npx skills add longwu1988/pensonal-dev-agent` 安装本仓库的开发体系。
-- zkxw 已单独接入上游技能和 Figma；这不代表本仓库已提供这些依赖的安装能力。
+- `scripts/pda.py` 提供预览、安装、只读检查和恢复；使用 Python 3.9+ 标准库，目前验证 macOS，Linux 尚未实测，Windows 不支持。
+- `skills/personal-dev/` 提供任务路由及协调/执行/审查职责。角色是可读职责定义，不是自动启动的宿主原生 Agent。
+- 试验内容目前在 `codex/development-system-v0-1` 分支及草稿 PR 中；main 未合并，尚无 npm 包或发布 Tag。
+- 完整接入使用本地脚本，见 [安装与验证](docs/installation.md)。单独安装 Skill 不会安装依赖或初始化工程；本轮未验证 npx skills 分发。
+- zkxw 已单独接入上游技能和 Figma；本安装器仅检查本地事实，不下载安装上游、修改账号或启用夜间调度。
 
 ## 第一版方案入口
 
@@ -24,13 +26,14 @@
 | 规则分层、目录、密钥与文件清理 | [工程治理规范](openspec/changes/development-system-v0-1/specs/workspace-governance/spec.md) |
 | 初始化、依赖、Codex/Cursor 接入与升级 | [分发规范](openspec/changes/development-system-v0-1/specs/capability-distribution/spec.md) |
 | 知识沉淀、夜间报告与人工审查 | [复盘规范](openspec/changes/development-system-v0-1/specs/knowledge-retrospective/spec.md) |
-| 本次文档落地工作与后续交付边界 | [实施任务](openspec/changes/development-system-v0-1/tasks.md) |
+| 设计基线任务 | [阶段 1](openspec/changes/development-system-v0-1/tasks.md) |
+| 最小接入实现与验证 | [阶段 2](openspec/changes/development-system-v0-1/implementation.md) |
 
-以上是待实现能力的目标要求，当前保存在 OpenSpec 变更目录；尚未归档为已经交付的长期规范。
+以上是完整体系的目标要求，部分已由最小接入实现；尚未完成全部验收，不归档为已交付的长期规范。
 
 ## 能力来源与组合方向
 
-以下是已确定的职责分工，实际组合仍需经过试点验证；本仓库尚未引入或安装这些上游依赖。
+以下是已确定的职责分工，实际组合仍需经过试点验证。候选来源、完整 commit、许可及入口摘要记录在 [core profile](profiles/core.json)；本仓库不复制上游正文、不安装上游依赖。
 
 | 来源 | 拟复用的能力 |
 | --- | --- |
@@ -45,15 +48,17 @@
 
 真实工程中的问题 → 可复现案例 → 提炼通用能力 → 验证 → 提交 → 发布 → 工程主动升级。
 
-第一轮验收覆盖一个空白工程、试点中的一个 Bug 修复和一个功能变更。能力成熟后按需建立以下目录；当前不创建占位内容：
+第一轮验收覆盖一个空白工程、试点中的一个 Bug 修复和一个功能变更。当前目录按已实现能力建立：
 
 | 目录 | 职责 |
 | --- | --- |
 | `skills/` | 可复用任务流程及所需资源 |
-| `agents/` | 工具无关的角色职责、输入输出和工作边界 |
-| `adapters/` | 各工具的配置生成或转换逻辑 |
+| `skills/personal-dev/references/roles.md` | 工具无关的角色职责；随 Skill 一起分发 |
+| `scripts/` | 本地安装、配置校验、事务恢复及状态检查 |
+| `adapters/` | Cursor 的规则入口；两端共享同一份 Skill |
 | `templates/` | 提供给使用方工程的初始化模板 |
-| `profiles/` | 经过验证的能力组合与技术栈配置 |
+| `profiles/` | 固定来源的候选能力组合，行为验证状态显式标记 |
+| `tests/` | 安装器测试与技能合成行为验收记录 |
 
 目录名本身不会让工具自动加载角色，也不会自动安装第三方插件。引入分发能力时，应同时提供对应的安装、验证和升级说明。
 
