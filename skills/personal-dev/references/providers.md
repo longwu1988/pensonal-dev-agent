@@ -6,8 +6,8 @@
 | --- | --- | --- |
 | 未完成的需求/领域澄清 | Matt Pocock grilling | 只处理尚未确认决策；已有阶段证据直接移交 |
 | Bug 根因定位 | Superpowers systematic-debugging | 核对实际正文与依赖，使用一个调试主流程 |
-| 实现测试循环 | Superpowers test-driven-development | 按任务范围执行；不另叠加 Matt tdd |
-| 最终结果核验 | Superpowers verification-before-completion | 以实际命令证据判断，不代替独立审查 |
+| 实现测试循环 | Superpowers test-driven-development | 仅 Agent 测试模式按任务范围执行；用户明确自测时不运行，不另叠加 Matt tdd |
+| 最终结果核验 | Superpowers verification-before-completion | 按测试责任读取命令证据或用户验收确认，不把用户测试模式变成自动测试，不代替独立审查 |
 | 规格记录 | OpenSpec CLI/宿主入口 | 读取工程 config，按工程指定产物归属保存 |
 | 复杂无参考 UI | Figma MCP | 实际授权与连接可用，按宿主必需技能操作 |
 
