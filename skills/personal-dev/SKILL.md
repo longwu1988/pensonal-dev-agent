@@ -15,6 +15,7 @@ description: Use when starting a project, implementing a tracked feature, fixing
 | --- | --- |
 | 空白工程、大需求、技术栈或架构变化 | [建设与规格](references/planning.md) |
 | 正式功能、局部 Bug、界面实现 | [实施流程](references/implementation.md) |
+| 安装或更新依赖、下载工具链、配置 CI/Docker 构建源 | [依赖下载与镜像](references/dependency-downloads.md) |
 | 界面实现、布局样式修改，含原型豁免与已有组件复用 | [界面一致性、原型与验收](references/ui-design.md) |
 | 审查、推送、合并、打包、清理 | [交付流程](references/delivery.md) |
 | 需要协调、执行或独立审查职责 | [角色边界](references/roles.md) |
