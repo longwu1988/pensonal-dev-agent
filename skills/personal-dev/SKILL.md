@@ -7,7 +7,7 @@ description: Use when starting a project, implementing a tracked feature, fixing
 
 从工程根目录读取 `AGENTS.md` 和 `docs/agents/project.json`；缺失配置时先列出缺口，只补当前阶段必要事实。遵守宿主与用户指令，本技能不授予外部写操作权限。
 
-1. 判断任务与已完成阶段，复用工单、用户确认及现有 worktree 的证据。按下表只读取相关分支。
+1. 判断任务与已完成阶段，复用工单、用户确认及现有 worktree 的证据。涉及关键未知项时先按[关键疑问先澄清](references/planning.md#关键疑问先澄清)处理，再定稿相关文档或开发；按下表读取其余分支。
 2. 开始实现前明确验收条件、集成分支、影响应用及对应目录规则；修改端不明确时按[实施流程](references/implementation.md)先确认范围，并读取[测试责任](references/testing.md)；默认 Agent 测试，用户明确自测时按用户模式交付。未知环境不视为已验证。
 3. 移交时保留“当前阶段、依据、下一动作、验证缺口”。交付前读取交付分支，不能以提交成功代替验收。
 
