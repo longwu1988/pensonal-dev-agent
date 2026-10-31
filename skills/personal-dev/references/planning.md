@@ -6,7 +6,7 @@
 
 确定依赖安装、工具链与 CI/Docker 构建方式时，读取[依赖下载与镜像](dependency-downloads.md)，将适用的源配置纳入工程现有环境说明。
 
-安排服务账号与环境时，按[工程本地凭据](credentials.md)确定当前工程的本地保存位置、环境分类和忽略规则；配置中只记录来源，不复制真实值。
+安排账号与环境时，按[凭据用途与来源](credentials.md)分别确定应用运行配置和 Agent 操作账号的来源；接入说明只记录来源，不集中复制真实值。
 
 正式功能关联工程指定工单。新能力、业务规则、跨模块或 API 变化使用 OpenSpec：在 `openspec/changes/<change>/` 保存 proposal、design、tasks 和 specs；各产物分工，不在工单和另一套 plans 目录复制完整正文。工单保留诉求、验收与链接。
 
