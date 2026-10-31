@@ -64,6 +64,10 @@ Agent 会核对工程仓库、集成主分支、应用目录、测试入口、�
 
 完整步骤见安装目录 `references/local-validation.md`。合并后还要核对本机真正运行的是集成版本，避免仍在访问旧 worktree 或旧构建产物。
 
+普通工单和队列共用收尾检查。你说“验证通过，请提交并 push”时，智能体应续接原工单，在已有授权且必要验证完成后回写、关闭并重新读取确认。最终回复会列出工单、提交、验收依据及关闭状态；只推送成功不代表工单完成。要暂缓可明确说“只推送，先不要关闭工单”。
+
+本地收尾进度保存在 Git 忽略的 `.local/agent/delivery/`，由 Agent 使用 `delivery-status`、`delivery-record`、`delivery-check`；队列最后使用 `queue-finish`，无需你手动运行一串命令。中断后先核对已完成动作，不重复发表评论。详见安装目录 `references/completion.md`。这些命令不自动测试、关单或后台续跑。
+
 ## 批量处理工单
 
 先在工程仓库中为准备交给 AI 的工单添加 `ai-ready`。队列只处理未关闭、无指派人且没有 `ai-blocked` / `ai-in-progress` 的工单，PR 不参与。可用 `p0` 至 `p3` 表示优先级，p0 最高；同级先处理较早创建的工单。
