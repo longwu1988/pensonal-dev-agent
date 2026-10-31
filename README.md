@@ -2,6 +2,8 @@
 
 个人开发体系：从真实工程中提炼可复用的开发流程、Skills、Agent 角色和工具适配，逐步形成可安装、可验证、可升级的能力集合。
 
+安装后先看[使用指南](templates/project-guide.md)：包含可复制的对话示例、工单队列启停、测试交付、更新和常见问题。完整安装会将它放到工程的 `docs/agents/README.md`。
+
 ## 当前状态
 
 仓库处于最小接入试验阶段：已提供本地安装器、个人任务入口和分层流程。尚未发布稳定版本，真实业务场景及两端会话验收仍待完成。
@@ -24,7 +26,7 @@
 | --- | --- |
 | 范围、成熟度与交付顺序 | [变更提案](openspec/changes/development-system-v0-1/proposal.md) |
 | 角色分工、上游组合与适配边界 | [架构设计](openspec/changes/development-system-v0-1/design.md) |
-| 工单、Figma 验收、worktree、合并与 Drone 打包 | [开发与交付规范](openspec/changes/development-system-v0-1/specs/development-lifecycle/spec.md) |
+| 工单、Figma 验收、worktree、合并与可选打包方案 | [开发与交付规范](openspec/changes/development-system-v0-1/specs/development-lifecycle/spec.md) |
 | 规则分层、目录、密钥与文件清理 | [工程治理规范](openspec/changes/development-system-v0-1/specs/workspace-governance/spec.md) |
 | 初始化、依赖、Codex/Cursor 接入与升级 | [分发规范](openspec/changes/development-system-v0-1/specs/capability-distribution/spec.md) |
 | 知识沉淀、夜间报告与人工审查 | [复盘规范](openspec/changes/development-system-v0-1/specs/knowledge-retrospective/spec.md) |

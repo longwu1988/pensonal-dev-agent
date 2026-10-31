@@ -175,6 +175,11 @@ def doctor(root, package):
         "openspec_cli_on_path": shutil.which("openspec") is not None,
         "figma_config_files": [p for p in (".mcp.json", ".cursor/mcp.json") if (root / p).is_file()],
         "external_connections": "not_checked", "host_behavior": "not_verified",
-        "drone_status_from_project": config["delivery"]["status"],
+        "delivery": {"provider": config["delivery"]["provider"],
+                     "trigger": config["delivery"]["trigger"],
+                     "status": config["delivery"]["status"], "inspected": False},
+        # Legacy output keys remain available; other providers are not Drone.
+        "drone_status_from_project": (config["delivery"]["status"]
+                                      if config["delivery"]["provider"] == "drone" else None),
         "drone_inspected": False, "nightly_scheduler": "not_implemented",
     }

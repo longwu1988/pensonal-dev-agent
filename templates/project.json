@@ -23,8 +23,8 @@
     "status": "unverified"
   },
   "delivery": {
-    "provider": "drone",
-    "trigger": "tag",
+    "provider": null,
+    "trigger": null,
     "status": "unverified",
     "evidence": null
   },

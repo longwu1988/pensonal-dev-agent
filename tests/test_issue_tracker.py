@@ -104,6 +104,32 @@ class TrackerTests(unittest.TestCase):
         self.assertEqual(parse_qs(urlsplit(requests[0].full_url).query)['state'], ['open'])
         self.assertIsNone(requests[0].get_header('Authorization'))
 
+    def test_issue_list_accepts_null_pr_marker_but_excludes_pr_objects(self):
+        for kind, repository in [('gitea', 'https://git.example/team/repo'),
+                                 ('github', 'https://github.com/team/repo')]:
+            with self.subTest(kind=kind):
+                tracker = self.tracker(kind, repository)
+                items = [{'number': 17, 'state': 'open', 'pull_request': None},
+                         {'number': 18, 'state': 'open'},
+                         {'number': 19, 'state': 'open', 'pull_request': {}},
+                         {'number': 20, 'state': 'open', 'pull_request': {'url': 'https://git.example/pr/20'}}]
+                result, _ = self.run_responses(tracker, [items, []])
+                self.assertEqual([item['number'] for item in result], [17, 18])
+
+    def test_issue_detail_accepts_null_marker_with_comments_and_rejects_pr(self):
+        for kind, repository in [('gitea', 'https://git.example/team/repo'),
+                                 ('github', 'https://github.com/team/repo')]:
+            with self.subTest(kind=kind):
+                tracker = self.tracker(kind, repository)
+                result, _ = self.run_responses(tracker,
+                    [{'number': 17, 'pull_request': None}, [{'body': 'Full discussion'}], []],
+                    lambda: tracker.issue(17))
+                self.assertEqual(result['comments_data'], [{'body': 'Full discussion'}])
+                for marker in ({}, {'url': 'https://git.example/pr/17'}):
+                    with self.assertRaises(InstallError):
+                        self.run_responses(tracker, [{'number': 17, 'pull_request': marker}],
+                                           lambda: tracker.issue(17))
+
     def test_both_trackers_preserve_images_and_all_comment_pages(self):
         for kind, repository in [('gitea', 'https://git.example/forge/team/repo'),
                                  ('github', 'https://github.com/team/repo')]:

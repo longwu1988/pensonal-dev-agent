@@ -16,6 +16,10 @@ python3 scripts/pda.py doctor --project /path/to/project
 
 默认 init 只展示文件动作及完整差异，不创建目录或文件。--apply 在相同预检通过后写入。存在同名的非受管文件、用户修改过的受管文件、无效配置或不安全目标路径时停止；没有强制覆盖选项。
 
+## 安装后如何使用
+
+安装完成后打开工程的 `docs/agents/README.md`，按“第一次使用”示例开始新会话。源码中的同一份[使用指南](../templates/project-guide.md)会随安装和升级分发，末尾保留工程配置字段说明。此指南是受管文件，项目个性配置维护在 `project.json` 和非受管工程规则中。
+
 ## 安装什么
 
 | 工程位置 | 归属与行为 |
@@ -23,7 +27,7 @@ python3 scripts/pda.py doctor --project /path/to/project
 | `.agents/skills/personal-dev/` | 安装器管理的唯一 Skill 内容，含分层流程、角色和 scripts 更新、队列运行时 |
 | `.cursor/rules/personal-dev.mdc` | 安装器管理的 Cursor 入口，只指向共享规则 |
 | 根 `AGENTS.md`、`.gitignore` | 仅维护 personal-dev 标记区；区外原始字节保留 |
-| `docs/agents/README.md` | 配置字段说明，安装器管理 |
+| `docs/agents/README.md` | 使用指南、对话示例及配置字段说明，安装器管理 |
 | `docs/agents/project.json` | 工程自行维护；只在不存在时生成，升级保留 |
 | `docs/agents/personal-dev.dependencies.json` | 固定上游候选来源，不是自动安装清单 |
 | `docs/agents/personal-dev.lock.json` | 可提交的受管内容摘要及来源 commit；新克隆也能幂等识别 |
@@ -76,7 +80,7 @@ HTTP 读取支持 Gitea 与 github.com，使用 `PDA_GITEA_TOKEN` / `PDA_GITHUB_
 
 ## 检查范围与限制
 
-doctor 只读取工程配置、本地候选入口摘要、MCP 配置文件是否存在及 PATH 中 OpenSpec 是否存在；不执行配置里的命令、不访问远端、不检查 Drone。报告不包含 MCP 配置正文，避免输出其中凭据。
+doctor 只读取工程配置、本地候选入口摘要、MCP 配置文件是否存在及 PATH 中 OpenSpec 是否存在；不执行配置里的命令、不访问远端、不检查 CI 或运行打包。delivery 按实际配置报告，未选择 CI 不列为接入缺失；兼容字段 drone_status_from_project 仅在 provider 为 drone 时返回其状态，否则为 null。报告不包含 MCP 配置正文，避免输出其中凭据。
 
 入口摘要匹配不代表完整上游依赖、账号授权或行为验证通过。候选引用没有复制上游正文，各来源及许可见 [core profile](../profiles/core.json)；组合冲突由 [能力选择](../skills/personal-dev/references/providers.md) 明确处理。
 

@@ -219,9 +219,9 @@ class Tracker:
         raise InstallError('issue tracker pagination limit exceeded')
 
     def issues(self):
-        """Return all open issue dictionaries, excluding pull requests."""
+        """Return open issues; Gitea may include pull_request: null on them."""
         return [item for item in self._pages('/issues', self._budget(), state='open')
-                if 'pull_request' not in item and item.get('state', 'open') == 'open']
+                if item.get('pull_request') is None and item.get('state', 'open') == 'open']
 
     def issue(self, number):
         """Return the issue and its complete comments_data list as untrusted data."""
@@ -230,7 +230,7 @@ class Tracker:
         budget = self._budget()
         suffix = '/issues/' + str(number)
         value = self._request(suffix, budget)
-        if not isinstance(value, dict) or value.get('number') != number or 'pull_request' in value:
+        if not isinstance(value, dict) or value.get('number') != number or value.get('pull_request') is not None:
             raise InstallError('invalid issue tracker issue response')
         result = dict(value)
         result['comments_data'] = self._pages(suffix + '/comments', budget)
