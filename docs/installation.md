@@ -76,7 +76,7 @@ HTTP 读取支持 Gitea 与 github.com，使用 `PDA_GITEA_TOKEN` / `PDA_GITHUB_
 
 ## 检查范围与限制
 
-doctor 只读取工程配置、本地候选入口摘要、MCP 配置文件是否存在及 PATH 中 OpenSpec 是否存在；不执行配置里的命令、不访问远端、不检查 Drone。报告不包含 MCP 配置正文，避免输出其中凭据。
+doctor 只读取工程配置、本地候选入口摘要、MCP 配置文件是否存在及 PATH 中 OpenSpec 是否存在；不执行配置里的命令、不访问远端、不检查 CI 或运行打包。delivery 按实际配置报告，未选择 CI 不列为接入缺失；兼容字段 drone_status_from_project 仅在 provider 为 drone 时返回其状态，否则为 null。报告不包含 MCP 配置正文，避免输出其中凭据。
 
 入口摘要匹配不代表完整上游依赖、账号授权或行为验证通过。候选引用没有复制上游正文，各来源及许可见 [core profile](../profiles/core.json)；组合冲突由 [能力选择](../skills/personal-dev/references/providers.md) 明确处理。
 

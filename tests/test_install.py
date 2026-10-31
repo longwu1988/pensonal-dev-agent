@@ -57,6 +57,36 @@ class InstallTests(unittest.TestCase):
         actual = {p: v for p, v in self.snapshot().items() if not p.startswith(".local/")}
         self.assertEqual(actual, before)
 
+    def test_new_project_does_not_select_drone_or_require_ci(self):
+        self.run_cli('init', '--apply')
+        value = json.loads((self.root / 'docs/agents/project.json').read_text())
+        self.assertIsNone(value['delivery']['provider'])
+        self.assertIsNone(value['delivery']['trigger'])
+        report = json.loads(self.run_cli('doctor').stdout)
+        self.assertIsNone(report['delivery']['provider'])
+        self.assertFalse(report['delivery']['inspected'])
+        self.assertIsNone(report['drone_status_from_project'])
+        self.assertFalse(any('delivery' in item or 'drone' in item or 'ci' == item
+                             for item in report['missing_project_inputs']))
+
+    def test_delivery_choices_survive_upgrade_and_doctor_reports_actual_provider(self):
+        self.run_cli('init', '--apply')
+        path = self.root / 'docs/agents/project.json'
+        for provider, trigger, status in [('drone', 'tag', 'user-confirmed'),
+                                          ('github-actions', 'manual', 'user-confirmed'),
+                                          ('manual', 'manual', 'user-confirmed'),
+                                          ('none', None, 'not-applicable')]:
+            with self.subTest(provider=provider):
+                config = json.loads(path.read_text())
+                config['delivery'] = dict(provider=provider, trigger=trigger, status=status, evidence='project decision')
+                path.write_text(json.dumps(config))
+                before = path.read_bytes()
+                self.run_cli('init', '--apply')
+                self.assertEqual(path.read_bytes(), before)
+                report = json.loads(self.run_cli('doctor').stdout)
+                self.assertEqual(report['delivery'],dict(provider=provider,trigger=trigger,status=status,inspected=False))
+                self.assertEqual(report['drone_status_from_project'],status if provider=='drone' else None)
+
     def test_user_config_and_outside_block_edits_survive_repeat(self):
         self.run_cli("init", "--apply")
         config = self.root / "docs/agents/project.json"
