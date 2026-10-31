@@ -9,7 +9,7 @@ import stat
 import tempfile
 
 RUNTIME = ('scripts/pda.py',) + tuple('scripts/pda/' + name + '.py' for name in (
-    '__init__', 'config', 'install', 'transaction', 'source', 'remote', 'updates'))
+    '__init__', 'config', 'install', 'transaction', 'source', 'remote', 'updates', 'issue_queue', 'issue_tracker'))
 
 JOURNAL = ".local/agent/install/transaction.json"
 LOCK = ".local/agent/install/write.lock"

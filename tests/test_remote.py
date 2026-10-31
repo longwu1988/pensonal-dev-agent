@@ -79,6 +79,18 @@ class DownloadTests(unittest.TestCase):
                 with remote.download('a' * 40):
                     self.fail('partial runtime accepted')
 
+    def test_protocol_one_updater_refuses_queue_layout_and_protocol(self):
+        files, tree = self.payload()
+        self.assertIn('scripts/pda/issue_queue.py', list(files))
+        old_runtime = tuple(name for name in remote.RUNTIME if name not in
+                            ('scripts/pda/issue_queue.py', 'scripts/pda/issue_tracker.py'))
+        with patch.object(remote, 'RUNTIME', old_runtime), patch.object(remote.Client, 'get', return_value=tree):
+            with self.assertRaisesRegex(InstallError, 'runtime'):
+                with remote.download('a' * 40): self.fail('old updater accepted partial queue runtime')
+        with patch.object(remote, 'PROTOCOL', 1), patch.object(remote.Client, 'get', side_effect=[tree, self.archive(files)]):
+            with self.assertRaisesRegex(InstallError, 'protocol'):
+                with remote.download('a' * 40): self.fail('old protocol accepted')
+
     def test_large_unselected_member_is_rejected_before_decompression(self):
         files, tree = self.payload()
         # A sparse-looking tar header claims a huge file; no need to allocate it.
