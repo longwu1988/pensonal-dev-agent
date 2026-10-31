@@ -32,7 +32,7 @@ python3 scripts/pda.py doctor --project /path/to/project
 
 现有应用、MCP、OpenSpec 配置、上游 skills 与业务文件不在本安装器的写入清单内。应用映射从直接子目录的 AGENTS 发现，需人工核对补充；集成分支、仓库、验证命令及环境不猜测。
 
-安装后维护 project.json：重要选择引用决策文档，未知状态保留未知。密钥仅记外部来源，不能填写真实值。权限默认为 false，按实际授权填写；配置不覆盖当前会话或宿主限制。小程序真机、数据库环境等无法自动验证的条件继续保留缺口。
+安装后维护 project.json：重要选择引用决策文档，未知状态保留未知。凭据只记录来源路径，默认使用当前工程的 `.local/secrets/access.json`；真实值的创建和使用按[工程本地凭据](../skills/personal-dev/references/credentials.md)处理，安装器不自动创建敏感文件。权限默认为 false，按实际授权填写；配置不覆盖当前会话或宿主限制。小程序真机、数据库环境等无法自动验证的条件继续保留缺口。
 
 ## 工具入口
 

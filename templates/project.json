@@ -38,7 +38,7 @@
   },
   "environment": {
     "test": "unconfigured",
-    "secrets": "external-controlled-storage"
+    "secrets": ".local/secrets/access.json"
   },
   "knowledge": {
     "directory": "docs/knowledge",
