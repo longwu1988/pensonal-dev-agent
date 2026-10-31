@@ -104,6 +104,26 @@ class TrackerTests(unittest.TestCase):
         self.assertEqual(parse_qs(urlsplit(requests[0].full_url).query)['state'], ['open'])
         self.assertIsNone(requests[0].get_header('Authorization'))
 
+    def test_both_trackers_preserve_images_and_all_comment_pages(self):
+        for kind, repository in [('gitea', 'https://git.example/forge/team/repo'),
+                                 ('github', 'https://github.com/team/repo')]:
+            with self.subTest(kind=kind):
+                tracker = self.tracker(kind, repository)
+                body = 'Initial ![screen](/attachments/original.png)'
+                comments = [
+                    {'id': 11, 'body': 'First comment', 'created_at': '2026-01-01T00:00:00Z'},
+                    {'id': 12, 'body': '<img src="/attachments/revised.png" alt="new screen">'},
+                    {'id': 13, 'body': 'Changed scope ![detail][shot]\n\n[shot]: https://images.example/detail.png',
+                     'updated_at': '2026-01-02T00:00:00Z'}]
+                result, requests = self.run_responses(tracker,
+                    [{'number': 7, 'body': body}, *[[item] for item in comments], []],
+                    lambda: tracker.issue(7))
+                self.assertEqual(result['body'], body)
+                self.assertEqual(result['comments_data'], comments)
+                pages = [parse_qs(urlsplit(r.full_url).query)['page'][0] for r in requests[1:]]
+                self.assertEqual(pages, ['1', '2', '3', '4'])
+                self.assertTrue(all('/attachments/' not in r.full_url for r in requests))
+
     def test_github_detail_includes_all_comments_and_ignores_remote_urls(self):
         tracker = self.tracker('github', 'git@github.com:team/repo.git')
         result, requests = self.run_responses(tracker, [

@@ -8,3 +8,5 @@
 - [x] 新增 `skills/personal-dev/references/issue-queue.md`，接入 SKILL 与工单流程；明确用户开始/结束、空队列、等待确认、需求不可信、分支/服务/凭据边界和重入规则。同步 README 与安装说明。
 - [x] 运行 `python3 -m unittest discover -s tests -v`、两处 OpenSpec validate、相对引用和 `git diff --check`；独立规格/质量审查，修正阻塞后再次验证。
 - [x] 本地提交候选并报告实测与未验证边界；不擅自开启真实工程队列。发布按用户明确授权进行。
+
+- [x] 补充统一工单上下文规则：全部分页评论、实际读图、缺口与变更复核；双平台图片引用保留测试、独立五项行为复核及安装分发验证。

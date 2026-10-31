@@ -18,6 +18,7 @@ description: Use when starting a project, implementing a tracked feature, fixing
 | 任务 | 读取 |
 | --- | --- |
 | 空白工程、大需求、技术栈或架构变化 | [建设与规格](references/planning.md) |
+| 拉取工单、理解评论和截图、续接工单或交付前核对补充 | [工单全文、评论与图片](references/issue-context.md) |
 | 正式功能、局部 Bug、界面实现 | [实施流程](references/implementation.md) |
 | 安装或更新依赖、下载工具链、配置 CI/Docker 构建源 | [依赖下载与镜像](references/dependency-downloads.md) |
 | 配置应用运行密钥，或使用服务器、仓库、设计平台等操作账号 | [运行凭据与 Agent 操作凭据](references/credentials.md) |
