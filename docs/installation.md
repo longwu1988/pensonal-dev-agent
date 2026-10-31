@@ -2,12 +2,12 @@
 
 ## 获取与使用
 
-本版是草稿分支上的试验能力，尚未发布稳定 Tag。需要 Python 3.9+，仅使用标准库。文件锁使用 POSIX fcntl，当前在 macOS 验证；Linux 待实测，Windows 暂不支持。
+本版从 `main` 提供试验能力，尚未发布稳定 Tag。需要 Python 3.9+，仅使用标准库。文件锁使用 POSIX fcntl，当前在 macOS 验证；Linux 待实测，Windows 暂不支持。
 
 先克隆明确的分支，审阅代码并记录 commit；后续只在工程主动选择时更新。以下在个人仓库目录执行，将占位的项目路径替换为真实的已有目录：
 
 ```sh
-git clone --branch codex/development-system-v0-1 https://github.com/longwu1988/pensonal-dev-agent.git
+git clone --branch main https://github.com/longwu1988/pensonal-dev-agent.git
 cd pensonal-dev-agent
 python3 scripts/pda.py init --project /path/to/project
 python3 scripts/pda.py init --project /path/to/project --apply
