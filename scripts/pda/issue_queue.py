@@ -347,15 +347,144 @@ class Queue:
         with self._locked():
             state = self.status(); self._active(state)
             if not state['current']: raise InstallError('no current queue issue')
-            item = self.tracker.issue(state['current']['number'])
-            if item.get('state') != 'closed' or not self.lease.contains(commit, self.branch):
-                raise InstallError('remote issue closure and reachable integration commit required')
+            number = state['current']['number']
+            Delivery(self.root, self.tracker.repository, self.branch).check(number, commit, self.tracker, self.lease)
             self._active(state)
-            state['completed'].append(item['number'])
-            state['last_completion'] = dict(number=item['number'], commit=commit, evidence=evidence)
+            state['completed'].append(number)
+            state['last_completion'] = dict(number=number, commit=commit, evidence=evidence)
             state['current'] = None
             self._transition(state)
             return state
+
+
+DELIVERY_DIRECTORY = '.local/agent/delivery'
+DELIVERY_STEPS = ('accepted', 'integration_verified', 'remote_synced', 'environment_restored', 'issue_updated')
+
+
+class Delivery:
+    """Local evidence checkpoints plus live completion checks, shared by single issues and queues.
+
+    Checkpoints are Agent assertions, not test execution or external write authorization.
+    Only check() reads the remote; it never pushes, comments, closes issues or starts services.
+    """
+    def __init__(self, root, repository, branch):
+        self.root, self.repository, self.branch = Path(root), repository, branch
+
+    def _path(self, number):
+        if type(number) is not int or number <= 0:
+            raise InstallError('positive issue number required')
+        return DELIVERY_DIRECTORY + '/' + str(number) + '.json'
+
+    @contextmanager
+    def _locked(self):
+        path = safe_path(self.root, DELIVERY_DIRECTORY + '/write.lock')
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path.parent.chmod(0o700)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+        with os.fdopen(fd, 'a+b') as handle:
+            try: fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise InstallError('another delivery command is running') from exc
+            try: yield
+            finally: fcntl.flock(handle, fcntl.LOCK_UN)
+
+    def status(self, number):
+        raw = read(self.root, self._path(number))
+        if raw is None:
+            return {'status': 'unrecorded', 'issue': number, 'record': None, 'missing': list(DELIVERY_STEPS)}
+        try:
+            value = json.loads(raw)
+            if (not isinstance(value, dict) or value.get('version') != 1
+                    or value.get('issue') != number
+                    or value.get('repository') != self.repository
+                    or value.get('integration_branch') != self.branch
+                    or not isinstance(value.get('commit'), str)
+                    or not re.fullmatch('[0-9a-f]{40}', value['commit'])
+                    or not isinstance(value.get('steps'), dict)
+                    or set(value['steps']) - set(DELIVERY_STEPS)
+                    or any(not isinstance(v, str) or not v.strip() or not v.isprintable() or len(v) > 1000
+                           for v in value['steps'].values())):
+                raise ValueError()
+        except (ValueError, TypeError, UnicodeError):
+            raise InstallError('invalid delivery record or repository/branch binding; preserve it for recovery') from None
+        return {'status': 'recorded', 'issue': number, 'record': value,
+                'missing': [step for step in DELIVERY_STEPS if step not in value['steps']],
+                'requires_live_check': True}
+
+    def _save(self, number, value):
+        atomic_write(self.root, self._path(number), json_bytes(value), 0o600)
+
+    def record(self, number, commit, stage, evidence):
+        self._path(number)
+        if not isinstance(commit, str) or not re.fullmatch('[0-9a-f]{40}', commit):
+            raise InstallError('full delivery commit required')
+        if stage not in (*DELIVERY_STEPS, 'waiting_user'):
+            raise InstallError('unknown delivery stage')
+        if not isinstance(evidence, str) or not evidence.strip() or not evidence.isprintable() or len(evidence) > 1000:
+            raise InstallError('evidence locator required; never store credentials or issue bodies')
+        with self._locked():
+            old = self.status(number)['record']
+            if old is None or old['commit'] != commit:
+                if old:
+                    atomic_write(self.root, DELIVERY_DIRECTORY + '/archive/' + str(number) + '-' + old['commit'] + '.json',
+                                 json_bytes(old), 0o600)
+                value = dict(version=1, repository=self.repository, integration_branch=self.branch,
+                             issue=number, commit=commit, steps={}, waiting=None, last_verified=None)
+            else:
+                value = old
+            if stage == 'waiting_user':
+                value.update(steps={}, waiting=evidence, last_verified=None)
+            elif value['steps'].get(stage) != evidence:
+                # New earlier evidence invalidates downstream claims; identical retries are no-ops.
+                index = DELIVERY_STEPS.index(stage)
+                value['steps'] = {k: v for k, v in value['steps'].items() if DELIVERY_STEPS.index(k) < index}
+                value['steps'][stage] = evidence
+                value.update(waiting=None, last_verified=None)
+            self._save(number, value)
+            return self.status(number)
+
+    def check(self, number, commit, tracker, lease):
+        with self._locked():
+            current = self.status(number)
+            value = current['record']
+            if value is None:
+                raise InstallError('missing delivery record; reconstruct evidence before finishing')
+            value['last_verified'] = None
+            self._save(number, value)
+            if value['commit'] != commit:
+                raise InstallError('delivery commit changed; revalidate and record final version')
+            if current['missing']:
+                raise InstallError('missing delivery evidence: ' + ', '.join(current['missing']))
+            if tracker.repository != self.repository:
+                raise InstallError('delivery tracker repository mismatch')
+            if not lease.contains(commit, self.branch):
+                raise InstallError('delivery commit is not reachable from remote integration branch')
+            item = tracker.issue(number)
+            if item.get('number') != number or item.get('state') != 'closed' or item.get('pull_request') is not None:
+                raise InstallError('remote issue must be closed and read back before completing delivery')
+            # A snapshot is never a permanent guarantee: later calls always re-read remote state.
+            value['last_verified'] = datetime.now().astimezone().isoformat()
+            self._save(number, value)
+            return {'status': 'verified', 'issue': number, 'repository': self.repository,
+                    'integration_branch': self.branch, 'commit': commit, 'issue_state': 'closed',
+                    'checked_at': value['last_verified']}
+
+
+def validate_delivery_storage(root, delivery, number, next_commit=None):
+    """Check every actual write target, not a representative filename."""
+    path = delivery._path(number)
+    if git(root, 'ls-files', '--', DELIVERY_DIRECTORY):
+        raise InstallError('delivery records must not be Git-tracked')
+    paths = [path, DELIVERY_DIRECTORY + '/write.lock']
+    old = delivery.status(number)['record']
+    if old and next_commit is not None and old['commit'] != next_commit:
+        paths.append(DELIVERY_DIRECTORY + '/archive/' + str(number) + '-' + old['commit'] + '.json')
+    for target in paths:
+        safe_path(root, target)
+        try:
+            git(root, 'check-ignore', '--quiet', '--', target)
+        except InstallError:
+            raise InstallError('delivery state, lock and archive targets must be Git-ignored') from None
 
 
 def validate_remote(root, repository):
@@ -370,8 +499,9 @@ def dispatch(root, args):
     """CLI boundary: resolve shared root, validate binding, then call a small state transition."""
     root = main_project(root)
     queue = Queue(root, owner=args.owner)
-    action = args.action.removeprefix('queue-')
-    if action == 'status': return queue.status()
+    delivery_action = args.action.startswith('delivery-')
+    action = args.action.split('-', 1)[1]
+    if action == 'status' and not delivery_action: return queue.status()
     if action == 'stop':
         # Even malformed tracker config cannot prevent the local stop latch.
         return queue.stop()
@@ -392,6 +522,21 @@ def dispatch(root, args):
     except (KeyError, TypeError, ValueError, UnicodeError):
         raise InstallError('valid tracker repository and integration branch configuration required') from None
     validate_remote(root, repository)
+    if delivery_action:
+        delivery = Delivery(root, repository, branch)
+        if action == 'status':
+            if args.issue is not None:
+                return delivery.status(args.issue)
+            safe_path(root, DELIVERY_DIRECTORY + '/write.lock')
+            numbers = sorted(int(p.stem) for p in (root / DELIVERY_DIRECTORY).glob('*.json') if p.stem.isdigit())
+            return {'status': 'inventory', 'tasks': [delivery.status(n) for n in numbers]}
+        validate_delivery_storage(root, delivery, args.issue, args.commit if action == 'record' else None)
+        if action == 'record':
+            return delivery.record(args.issue, args.commit, args.stage, args.evidence)
+        # A queue task must use its guarded finish operation; standalone checking is not a queue bypass.
+        current = queue.status().get('current')
+        if current and current.get('number') == args.issue:
+            raise InstallError('current queue issue must use queue-finish with its owner')
     permissions = config.get('permissions', {})
     if action == 'start' and not args.apply:
         return {'status': 'preview', 'project': str(root), 'repository': repository,
@@ -408,15 +553,21 @@ def dispatch(root, args):
     credentials = config.get('environment', {}).get('secrets')
     if credentials in (None, '', '.local/secrets/access.json', 'external-controlled-storage'):
         credentials = None
-    if action != 'start' and not queue.status()['enabled']:
+    if not delivery_action and action != 'start' and not queue.status()['enabled']:
         raise InstallError('queue is stopped')
     queue.tracker = Tracker(tracker['kind'], repository, root, credentials_path=credentials)
     queue.lease = GitLease(root, repository=repository)
     queue.branch = branch
+    if delivery_action:
+        return delivery.check(args.issue, args.commit, queue.tracker, queue.lease)
     if action == 'start': return queue.start()
     if action == 'next': return queue.next()
     if action == 'guard': return queue.guard()
     if action == 'block': return queue.block(args.reason)
     if action == 'retry': return queue.retry(args.issue)
-    if action == 'finish': return queue.finish(args.commit, args.evidence)
+    if action == 'finish':
+        current = queue.status().get('current')
+        if current:
+            validate_delivery_storage(root, Delivery(root, repository, branch), current['number'])
+        return queue.finish(args.commit, args.evidence)
     raise InstallError('unknown queue action')

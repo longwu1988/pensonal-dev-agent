@@ -61,4 +61,80 @@ class QueueCLITests(unittest.TestCase):
         self.assertNotEqual(r.returncode,0)
         self.assertFalse((self.root/'.local').exists())
 
+
+    def test_delivery_status_is_read_only_and_record_survives_worktree_and_reinstall(self):
+        r = self.run_cli('delivery-status')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)['tasks'], [])
+        self.assertFalse((self.root / '.local').exists())
+        sha = 'a'*40
+        r = self.run_cli('delivery-record', '--issue', '3', '--commit', sha,
+                         '--stage', 'waiting_user', '--evidence', 'synthetic task acceptance pending')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        state = self.root / '.local/agent/delivery/3.json'
+        before = state.read_bytes()
+        self.run_cli('delivery-record', '--issue', '3', '--commit', sha,
+                     '--stage', 'waiting_user', '--evidence', 'synthetic task acceptance pending')
+        self.assertEqual(state.read_bytes(), before)
+        for action in [('init', '--apply'), ('init', '--apply')]:
+            r = self.run_cli(*action)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(state.read_bytes(), before)
+        subprocess.run(['git','-C',str(self.root),'-c','user.name=Test','-c','user.email=test@example.invalid',
+                        'commit','--allow-empty','-m','initial'],check=True,capture_output=True)
+        worktree = self.root / '.local/agent/test-worktree'
+        subprocess.run(['git','-C',str(self.root),'worktree','add','-b','test',str(worktree)],check=True,capture_output=True)
+        cli = self.root / '.agents/skills/personal-dev/scripts/pda.py'
+        r = subprocess.run([sys.executable, str(cli), 'delivery-status', '--project', str(worktree), '--issue', '3'],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)['record']['commit'], sha)
+        self.assertFalse((worktree / '.local').exists())
+        self.assertEqual(json.loads(self.run_cli('queue-status').stdout)['enabled'], False)
+
+    def test_delivery_check_rejects_missing_record_and_current_queue_even_when_stopped(self):
+        r = self.run_cli('delivery-check', '--issue', '3', '--commit', 'a'*40)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('missing delivery record', r.stderr)
+        state = json.loads(self.run_cli('queue-status').stdout)
+        state['current'] = {'number': 3, 'stage': 'ready_to_merge'}
+        path = self.root / '.local/agent/queue/state.json'
+        path.parent.mkdir(parents=True); path.write_text(json.dumps(state))
+        r = self.run_cli('delivery-check', '--issue', '3', '--commit', 'a'*40)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('queue-finish', r.stderr)
+        self.assertFalse(json.loads(self.run_cli('queue-status').stdout)['enabled'])
+
+    def test_delivery_checks_actual_record_lock_and_archive_ignore_rules(self):
+        args = ('delivery-record', '--issue', '3', '--commit', 'a'*40, '--stage', 'accepted', '--evidence', 'synthetic')
+        for rules in ('/.local/agent/delivery/*.json\n!/.local/agent/delivery/3.json\n',
+                      '/.local/agent/delivery/*.json\n'):
+            with self.subTest(rules=rules):
+                (self.root / '.gitignore').write_text(rules)
+                r = self.run_cli(*args)
+                self.assertNotEqual(r.returncode, 0, r.stdout)
+                self.assertFalse((self.root / '.local').exists())
+        (self.root / '.gitignore').write_text('/.local/agent/delivery/*.json\n/.local/agent/delivery/write.lock\n')
+        r = self.run_cli(*args); self.assertEqual(r.returncode, 0, r.stderr)
+        before = (self.root / '.local/agent/delivery/3.json').read_bytes()
+        r = self.run_cli('delivery-record', '--issue', '3', '--commit', 'b'*40,
+                         '--stage', 'waiting_user', '--evidence', 'new revision pending')
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertFalse((self.root / '.local/agent/delivery/archive').exists())
+        self.assertEqual((self.root / '.local/agent/delivery/3.json').read_bytes(), before)
+
+    def test_delivery_rejects_missing_args_tracked_state_and_wrong_remote(self):
+        r = self.run_cli('delivery-record', '--issue', '3')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse((self.root / '.local').exists())
+        args = ('delivery-record', '--issue', '3', '--commit', 'a'*40, '--stage', 'accepted', '--evidence', 'synthetic')
+        r = self.run_cli(*args); self.assertEqual(r.returncode, 0, r.stderr)
+        subprocess.run(['git','-C',str(self.root),'add','-f','.local/agent/delivery/3.json'],check=True,capture_output=True)
+        r = self.run_cli(*args)
+        self.assertNotEqual(r.returncode, 0); self.assertIn('Git-tracked', r.stderr)
+        subprocess.run(['git','-C',str(self.root),'remote','set-url','--push','origin',
+                        'https://git.example.invalid/other/project'],check=True,capture_output=True)
+        r = self.run_cli('delivery-status', '--issue', '3')
+        self.assertNotEqual(r.returncode, 0); self.assertIn('origin', r.stderr)
+
 if __name__=='__main__': unittest.main()

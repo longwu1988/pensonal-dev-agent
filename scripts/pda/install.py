@@ -95,7 +95,7 @@ def plan(root, package, source=None):
     }
     blocks = {
         "AGENTS.md": (BEGIN, END,
-            "工程建设、需求开发、Bug 修复或交付时，读取 "
+            "工程建设、需求开发、Bug 修复、验收反馈或提交/push/合并续聊时，读取 "
             "[个人开发入口](.agents/skills/personal-dev/SKILL.md)，"
             "并按需查阅 [工程配置](docs/agents/README.md)。"
             "业务约束继续遵循目标目录规则；纯咨询无需启动开发流程。"),

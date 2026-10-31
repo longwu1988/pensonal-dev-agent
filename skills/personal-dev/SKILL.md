@@ -1,6 +1,6 @@
 ---
 name: personal-dev
-description: Use when starting a project, implementing a tracked feature, fixing a bug, preparing delivery, or starting, stopping, inspecting or resuming an issue queue in a project using the personal development system. Not for concept-only questions or unrelated tasks.
+description: Use when starting a project, implementing a tracked feature, fixing a bug, receiving acceptance feedback, committing/pushing an existing task, preparing delivery, or starting, stopping, inspecting or resuming an issue queue in a project using the personal development system. Not for concept-only questions or unrelated tasks.
 ---
 
 # 个人开发任务入口
@@ -13,7 +13,8 @@ description: Use when starting a project, implementing a tracked feature, fixing
 
 1. 判断任务与已完成阶段，复用工单、用户确认及现有 worktree 的证据。涉及关键未知项时按[澄清与推荐选择](references/planning.md#关键疑问先澄清)处理，对已采用全量默认策略的任务统一提供推荐并等待 180 秒，再定稿相关文档或开发；按下表读取其余分支。
 2. 开始实现前明确验收条件、集成分支、影响应用及对应目录规则；修改端不明确时按[实施流程](references/implementation.md)先确认范围，并读取[测试责任](references/testing.md)；默认 Agent 测试，用户明确自测时按用户模式交付。未知环境不视为已验证。
-3. 移交时保留“当前阶段、依据、下一动作、验证缺口”。交付前读取交付分支，不能以提交成功代替验收。
+3. 用户确认通过、要求提交/push/合并或从中断续接时，先读[工单收尾检查](references/completion.md)，恢复原任务的关联与未完成步骤；已有授权下完成关单及读回核验，不能只做最后一句 Git 动作。用户明确限定动作或停止时保留剩余待办。
+4. 移交时保留“当前阶段、依据、下一动作、验证缺口”。交付前读取交付分支，不能以提交成功代替验收。
 
 | 任务 | 读取 |
 | --- | --- |

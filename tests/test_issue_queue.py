@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 try:
-    from pda.issue_queue import Queue, GitLease, STOP
+    from pda.issue_queue import Queue, GitLease, STOP, Delivery, DELIVERY_STEPS
 except ImportError:
     Queue = GitLease = None
     STOP = '.local/agent/queue/stop'
@@ -44,6 +44,11 @@ class Lease:
         if self.head != sha: raise InstallError('not owner')
         self.head = None
     def contains(self, commit, branch): return self.merged
+
+
+def delivery_ready(root, tracker, number=1):
+    for stage in DELIVERY_STEPS:
+        Delivery(root, tracker.repository, 'main').record(number, 'a'*40, stage, 'synthetic ' + stage)
 
 
 class QueueTests(unittest.TestCase):
@@ -101,6 +106,7 @@ class QueueTests(unittest.TestCase):
         self.q.stop(); self.q.start()
         self.assertEqual(self.q.next()['issue']['number'], 17)
         self.tracker.items[0]['state'] = 'closed'; self.lease.merged = True
+        delivery_ready(self.root, self.tracker, 17)
         self.q.finish('a'*40, 'synthetic test evidence')
         self.assertEqual(self.q.status()['completed'], [17])
         self.assertEqual(self.q.next()['status'], 'empty')
@@ -193,6 +199,7 @@ class QueueTests(unittest.TestCase):
                     q.block('dependency'); tracker.items[1]['labels'].pop()
                 if action == 'finish':
                     tracker.items[1]['state']='closed'; lease.merged=True
+                    delivery_ready(Path(td), tracker)
                 before=q.status()
                 write=module.atomic_write
                 injected=False
@@ -275,6 +282,7 @@ class QueueTests(unittest.TestCase):
 
     def test_finish_needs_closed_issue_and_remote_commit_evidence(self):
         self.q.start(); self.q.next()
+        delivery_ready(self.root, self.tracker)
         with self.assertRaises(InstallError): self.q.finish('a'*40, 'docs/evidence.md')
         self.tracker.items[1]['state'] = 'closed'
         with self.assertRaises(InstallError): self.q.finish('a'*40, 'docs/evidence.md')
