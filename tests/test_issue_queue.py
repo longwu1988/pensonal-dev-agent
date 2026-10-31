@@ -91,6 +91,20 @@ class QueueTests(unittest.TestCase):
             with self.assertRaises(InstallError): q.next()
             self.assertIsNone(q.status()['current'])
 
+    def test_null_pr_marker_issue_can_be_claimed_resumed_and_finished(self):
+        self.tracker.items = [issue(17, pull_request=None),
+                              issue(18, 'p0', pull_request={}),
+                              issue(19, 'p0', pull_request={'url': 'https://git.example/pr/19'})]
+        self.q.start()
+        self.assertEqual(self.q.next()['issue']['number'], 17)
+        self.assertEqual(self.q.next()['status'], 'resume')
+        self.q.stop(); self.q.start()
+        self.assertEqual(self.q.next()['issue']['number'], 17)
+        self.tracker.items[0]['state'] = 'closed'; self.lease.merged = True
+        self.q.finish('a'*40, 'synthetic test evidence')
+        self.assertEqual(self.q.status()['completed'], [17])
+        self.assertEqual(self.q.next()['status'], 'empty')
+
     def test_stop_resume_keeps_checkpoint(self):
         self.q.start(); self.q.next()
         self.q.checkpoint('implementing', 'codex/issue-1', '/synthetic/worktree', 'a'*40)

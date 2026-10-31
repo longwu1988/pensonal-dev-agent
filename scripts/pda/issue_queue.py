@@ -104,7 +104,7 @@ def labels(item):
 def eligible(item):
     names = labels(item)
     return (type(item.get('number')) is int and item['number'] > 0 and item.get('state') == 'open'
-            and 'pull_request' not in item and 'ai-ready' in names
+            and item.get('pull_request') is None and 'ai-ready' in names
             and not names.intersection({'ai-blocked', 'ai-in-progress'})
             and not item.get('assignees') and not item.get('assignee'))
 
