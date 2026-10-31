@@ -50,7 +50,7 @@ class RecoveryTests(unittest.TestCase):
     def test_upgrade_then_recover_restores_previous_version(self):
         initialize(self.root, REPO, True)
         package = Path(self.temp.name) / "package"
-        for directory in ("skills", "adapters", "templates", "profiles"):
+        for directory in ("skills", "adapters", "templates", "profiles", "scripts"):
             shutil.copytree(REPO / directory, package / directory)
         source = package / "skills/personal-dev/SKILL.md"
         source.write_text(source.read_text() + "\nNew behavior for a synthetic upgrade.\n")

@@ -1,5 +1,6 @@
 """Project-owned inputs; inferred facts never confer authorization."""
 import json
+import copy
 from pathlib import PurePosixPath
 
 from .transaction import InstallError, read
@@ -16,6 +17,21 @@ def relative(value, label):
 
 
 def validate(config, template):
+    # Normalize supported project-owned shorthand in memory, never rewrite it.
+    config = copy.deepcopy(config)
+    if isinstance(config, dict) and isinstance(config.get('apps'), list):
+        for index, app in enumerate(config['apps']):
+            if isinstance(app, dict) and set(app) in (
+                    {'name', 'directory', 'test'}, {'name', 'directory', 'test', 'build'}):
+                checks = []
+                for field in ('test', 'build'):
+                    if field not in app:
+                        continue
+                    if not isinstance(app[field], str) or not app[field].strip():
+                        raise InstallError('app shorthand commands must be nonempty strings')
+                    checks.append({'command': app[field], 'environment': 'unverified'})
+                config['apps'][index] = {'name': app['name'], 'path': app['directory'],
+                                         'rules': None, 'validation': checks}
     def shape(value, sample, key):
         if isinstance(sample, dict):
             if not isinstance(value, dict) or value.keys() != sample.keys():
@@ -30,7 +46,8 @@ def validate(config, template):
     shape(config, template, "config")
     if config["schema_version"] != 1:
         raise InstallError("unsupported project schema_version")
-    if config["project"]["stage"] not in ("discovery", "existing"):
+    stage = config["project"]["stage"]
+    if not stage or stage != stage.strip() or not stage.isprintable() or len(stage) > 80:
         raise InstallError("invalid project stage")
     if config["knowledge"]["schedule_enabled"]:
         raise InstallError("nightly scheduling is not implemented")

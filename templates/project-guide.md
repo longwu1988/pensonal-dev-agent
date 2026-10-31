@@ -2,8 +2,8 @@
 
 `project.json` 是工程自行维护的输入；安装器升级保留它。路径以工程根目录为基准，未知值用 null 或空列表，不能把未知写成验证通过。
 
-- `project`：项目名称、discovery/existing 阶段、集成分支、工单仓库；分支不会默认取当前任务分支。
-- `apps`：每项提供 name、path、rules 与 validation。validation 是命令/环境说明列表，安装器不会执行。
+- `project`：项目名称、工程维护的阶段标签、集成分支、工单仓库；初始化用 discovery，可随进度改为 existing、test-deployed 等非空单行标签。阶段仅为描述，不授予部署或其他操作权限；分支不会默认取当前任务分支。
+- `apps`：每项提供 name、path、rules 与 validation。validation 是命令/环境说明列表，安装器不会执行。兼容已有工程的 name/directory/test（可选 build）简写，只在内存中映射为标准结构，不重写原文件；简写命令的环境标为 unverified，不能据此认定已经通过验证。
 - `decisions`：已确认技术栈与架构决策的文档路径；新工程在开发前确认，既有工程先沿用。
 - `worktree`：优先原生机制，fallback 为工程约定的隔离目录；数据库与端口另行隔离。
 - `figma`：具体文件/节点引用与状态；配置存在不代表授权或连接成功。

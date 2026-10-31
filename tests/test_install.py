@@ -123,6 +123,41 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(report["installation"], "present")
         self.assertEqual(report["host_behavior"], "not_verified")
 
+    def test_upgrade_preserves_project_owned_lifecycle_stage(self):
+        self.run_cli('init', '--apply')
+        path = self.root / 'docs/agents/project.json'
+        for stage in ('test-deployed', 'delivered-test'):
+            value = json.loads(path.read_text())
+            value['project']['stage'] = stage
+            path.write_text(json.dumps(value))
+            before = path.read_bytes()
+            self.run_cli('init', '--apply')
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_upgrade_preserves_project_app_shorthand_without_executing_commands(self):
+        self.run_cli('init', '--apply')
+        path = self.root / 'docs/agents/project.json'
+        value = json.loads(path.read_text())
+        value['apps'] = [{'name': 'web', 'directory': 'web', 'test': 'echo must-not-run', 'build': 'echo must-not-run'}]
+        path.write_text(json.dumps(value))
+        before = path.read_bytes()
+        result = self.run_cli('init', '--apply')
+        self.assertEqual(path.read_bytes(), before)
+        self.assertNotIn('must-not-run', result.stdout)
+        self.assertEqual(json.loads(self.run_cli('doctor').stdout)['config'], 'present')
+        value['apps'][0]['directory'] = '../outside'
+        path.write_text(json.dumps(value))
+        self.run_cli('init', '--apply', ok=False)
+
+    def test_invalid_lifecycle_stage_is_rejected(self):
+        self.run_cli('init', '--apply')
+        path = self.root / 'docs/agents/project.json'
+        for stage in ('', 'bad\nstage', True):
+            value = json.loads(path.read_text())
+            value['project']['stage'] = stage
+            path.write_text(json.dumps(value))
+            self.run_cli('init', '--apply', ok=False)
+
     def test_placeholder_readme_is_not_a_confirmed_stack_decision(self):
         (self.root / "README.md").write_text("# New project\n")
         report = json.loads(self.run_cli("doctor").stdout)

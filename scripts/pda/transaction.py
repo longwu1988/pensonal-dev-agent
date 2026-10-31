@@ -8,6 +8,9 @@ from pathlib import PurePosixPath
 import stat
 import tempfile
 
+RUNTIME = ('scripts/pda.py',) + tuple('scripts/pda/' + name + '.py' for name in (
+    '__init__', 'config', 'install', 'transaction', 'source', 'remote', 'updates'))
+
 JOURNAL = ".local/agent/install/transaction.json"
 LOCK = ".local/agent/install/write.lock"
 
@@ -90,11 +93,12 @@ def journal(root):
              "docs/agents/README.md", "docs/agents/personal-dev.lock.json",
              "docs/agents/personal-dev.dependencies.json",
              ".cursor/rules/personal-dev.mdc"}
+    runtime = {".agents/skills/personal-dev/" + name for name in RUNTIME}
     for entry in value["entries"]:
         if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
             raise InstallError("invalid recovery entry")
         name = entry["path"]
-        if name not in exact and not (
+        if name not in exact and name not in runtime and not (
             name.startswith(".agents/skills/personal-dev/") and name.endswith(".md")
         ):
             raise InstallError("unexpected recovery target: " + name)
@@ -188,3 +192,22 @@ def recover(root, apply=False):
         value["status"] = "recovered"
         atomic_write(root, JOURNAL, json_bytes(value), 0o600)
     print("Recovered. Local recovery journal retained; existing directories preserved.")
+
+
+if __name__ == '__main__':
+    # Keep recovery independent of the rest of the self-updating runtime.
+    import argparse
+    from pathlib import Path
+    import sys
+    parser = argparse.ArgumentParser(description='Standalone recovery of the last personal-dev install')
+    parser.add_argument('--project', required=True, type=Path)
+    parser.add_argument('--apply', action='store_true')
+    args = parser.parse_args()
+    root = args.project.expanduser().resolve()
+    if not root.is_dir():
+        parser.error('project must be an existing directory')
+    try:
+        recover(root, args.apply)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print('ERROR: ' + str(exc), file=sys.stderr)
+        sys.exit(1)

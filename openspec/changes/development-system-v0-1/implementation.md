@@ -4,7 +4,7 @@
 
 **Goal:** 交付可预览、可重试和可恢复的本地安装器，一份跨工具任务路由，以及使用方工程可维护的配置。
 
-**Architecture:** Python 3.9+ 标准库 CLI 读取本仓库资源。两端共用 `.agents/skills/personal-dev/`；根 AGENTS 仅追加管理区块，Cursor 新建单独规则指针。工程配置由用户维护，模板更新不覆盖它。安装器没有网络请求，不执行配置中的验证命令。
+**Architecture:** Python 3.9+ 标准库 CLI 读取本仓库资源。两端共用 `.agents/skills/personal-dev/`；根 AGENTS 仅追加管理区块，Cursor 新建单独规则指针。工程配置由用户维护，模板更新不覆盖它。原始 init/doctor/recover 不联网，也不执行配置中的验证命令；后续按工程联网检查与升级见 [更新扩展](updates.md)。
 
 **Tech Stack:** Python 标准库、unittest、JSON、Markdown、Cursor MDC。
 

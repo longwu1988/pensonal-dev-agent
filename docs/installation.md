@@ -20,14 +20,15 @@ python3 scripts/pda.py doctor --project /path/to/project
 
 | 工程位置 | 归属与行为 |
 | --- | --- |
-| `.agents/skills/personal-dev/` | 安装器管理的唯一 Skill 内容，含分层流程和角色 |
+| `.agents/skills/personal-dev/` | 安装器管理的唯一 Skill 内容，含分层流程、角色和 scripts 更新运行时 |
 | `.cursor/rules/personal-dev.mdc` | 安装器管理的 Cursor 入口，只指向共享规则 |
 | 根 `AGENTS.md`、`.gitignore` | 仅维护 personal-dev 标记区；区外原始字节保留 |
 | `docs/agents/README.md` | 配置字段说明，安装器管理 |
 | `docs/agents/project.json` | 工程自行维护；只在不存在时生成，升级保留 |
 | `docs/agents/personal-dev.dependencies.json` | 固定上游候选来源，不是自动安装清单 |
-| `docs/agents/personal-dev.lock.json` | 可提交的受管内容摘要；新克隆也能幂等识别 |
+| `docs/agents/personal-dev.lock.json` | 可提交的受管内容摘要及来源 commit；新克隆也能幂等识别 |
 | `.local/agent/install/` | 本地锁与最近一次事务备份，加入 Git 忽略，不提交 |
+| `.local/agent/updates/` | 当前电脑/工程的检查时间、候选、稍后提醒及跳过状态，不提交 |
 
 现有应用、MCP、OpenSpec 配置、上游 skills 与业务文件不在本安装器的写入清单内。应用映射从直接子目录的 AGENTS 发现，需人工核对补充；集成分支、仓库、验证命令及环境不猜测。
 
@@ -42,6 +43,18 @@ python3 scripts/pda.py doctor --project /path/to/project
 ## 更新、冲突与恢复
 
 更新个人仓库至自己选定的 commit，再运行 init 预览。只有现有受管文件仍与 lock 中的上次安装摘要相同才更新；用户配置保留，AGENTS 区外新增规则保留。若自行修改 Skill 或管理区，先审阅 diff，人工合并处理；不要删除 lock 或伪造摘要绕过冲突。
+
+### 按工程检查与选择更新
+
+首次从审阅过的源码运行 `init --apply` 会分发独立更新运行时，后续电脑只要克隆包含安装结果的业务工程并有 Python 3.9+，无需预先克隆个人源码即可检查。旧安装没有运行时或 source 字段时，先用完整安装器升级一次；安装源缺少 Git 信息或分发文件有未提交改动时 commit 为 null，不能据此判断更新。干净源码的版本识别需要 Git。
+
+具体命令和 Agent 提示规则见[版本检查与更新选择](../skills/personal-dev/references/updates.md)。首次启用新任务由 Agent 执行 check-update，默认 24 小时最多联网检查一次；推荐延后更新，不因沉默自动安装。稍后提醒和跳过状态按本机工程保存，安装版本按工程保存在可提交 lock；选择更新不同时替其他工程升级。
+
+版本固定到 `longwu1988/pensonal-dev-agent` 的 main 完整 commit。开发分支领先 main 时报告 ahead；分叉报告 diverged，不自动降级。检查失败继续本地工作，可显式 `--force` 重查。GitHub 公开 API 无账号依赖但有请求限额，网络和限额问题均不阻塞业务任务；本工具不改 Git 全局配置或自动配置代理。
+
+update 默认下载到系统临时目录并预览，只有 `--apply` 写入。当前本地运行时负责安装，不执行下载的 Python；校验固定提交的 Git blob 摘要、常规文件路径、体积和协议，临时下载退出即清理。将来变更运行时布局、安装语义或不兼容配置时须提高 `profiles/update.json` 的协议版本，并走经过审阅的完整安装器迁移，不让旧 updater 部分安装新运行时。协议 1 的事务模块保持自包含和 journal 格式兼容，保证新旧模块混合时仍可独立恢复。
+
+安装事务包含运行时和来源记录，因此 recover 会同时恢复版本；它不会恢复提醒偏好。更新期间 main 前进不改变用户选定候选，工程配置继续由工程维护。应用后新任务加载新规则，宿主自动发现、热重载及跨工具会话仍需单独验收。安装 runtime 只提供 update/check/choice/recover；init 和 doctor 仍从完整源码目录调用。
 
 写入前生成本地备份，每个文件原子替换。正常失败留下 prepared 状态，后续安装要求先恢复：
 

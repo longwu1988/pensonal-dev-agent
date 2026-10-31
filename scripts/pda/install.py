@@ -5,6 +5,7 @@ import json
 import shutil
 
 from .config import CONFIG, project_config
+from .source import RUNTIME, local_source
 from .transaction import (
     InstallError, JOURNAL, LOCK, apply_changes, ensure_ready, json_bytes,
     locked, read, safe_path,
@@ -27,6 +28,8 @@ def resources(package):
         "docs/agents/personal-dev.dependencies.json": (package / "profiles/core.json").read_bytes(),
         ".cursor/rules/personal-dev.mdc": (package / "adapters/cursor/personal-dev.mdc").read_bytes(),
     }
+    for name in RUNTIME:
+        files[".agents/skills/personal-dev/" + name] = (package / name).read_bytes()
     source = package / "skills/personal-dev"
     for path in sorted(source.rglob("*.md")):
         files[".agents/skills/personal-dev/" + path.relative_to(source).as_posix()] = path.read_bytes()
@@ -59,7 +62,7 @@ def merge_block(current, desired, old_hash, begin, end):
     return prefix + desired + suffix
 
 
-def plan(root, package):
+def plan(root, package, source=None):
     ensure_ready(root)
     safe_path(root, JOURNAL)
     safe_path(root, LOCK)
@@ -88,6 +91,7 @@ def plan(root, package):
         "schema_version": 1,
         "files": {name: digest(content) for name, content in desired.items()},
         "blocks": {},
+        "source": local_source(package) if source is None else source,
     }
     blocks = {
         "AGENTS.md": (BEGIN, END,
