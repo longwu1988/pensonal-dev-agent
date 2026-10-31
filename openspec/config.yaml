@@ -1,0 +1,8 @@
+schema: spec-driven
+
+context: |
+  本仓库沉淀跨工程复用的开发流程、Agent 职责、Skills 与工具适配。
+  第一版支持目标为 Codex、Cursor；Claude 暂缓。能力成熟度以 README.md 为准。
+  首个试点是 zkxw，业务细节与真实凭据保留在业务工程和受控环境中。
+  需求、设计、任务和规范变更使用 OpenSpec；避免生成平行的规格与计划。
+  本仓库维护规则见 AGENTS.md，来源、验证、提交与发布要求见 CONTRIBUTING.md。

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "status": "candidate-not-behavior-verified",
+  "mode": "external-reference-only",
+  "sources": [
+    {
+      "repo": "mattpocock/skills",
+      "commit": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
+      "license": "MIT",
+      "license_path": "LICENSE",
+      "skills": [
+        {
+          "name": "grilling",
+          "path": "skills/productivity/grilling/SKILL.md",
+          "sha256": "a146842ed93ca43d833550fa9adf02e58cb63c83fea9d4b4522995b82242d4e2"
+        }
+      ]
+    },
+    {
+      "repo": "obra/superpowers",
+      "commit": "2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
+      "license": "MIT",
+      "license_path": "LICENSE",
+      "skills": [
+        {
+          "name": "systematic-debugging",
+          "path": "skills/systematic-debugging/SKILL.md",
+          "sha256": "51c6435d98c83c42c96ba7c35725a0b2c376cd487fb1a4e6bd0ddbe7e33ef202"
+        },
+        {
+          "name": "test-driven-development",
+          "path": "skills/test-driven-development/SKILL.md",
+          "sha256": "64b03fce4aee5a97a93160cea8111f3ba13a17b7c001db4bd5836d67fd10705d"
+        },
+        {
+          "name": "verification-before-completion",
+          "path": "skills/verification-before-completion/SKILL.md",
+          "sha256": "2befe7fc55bcadaa3d97dd9e8efeb633d2561c0ebe74c5a8b17c4d9e7e4520b3"
+        }
+      ]
+    },
+    {
+      "repo": "Fission-AI/OpenSpec",
+      "commit": "6d04a1b58dedc95729d34e4f223d9d483aae210a",
+      "license": "MIT",
+      "license_path": "LICENSE",
+      "skills": [],
+      "mode": "external-cli-not-installed-by-pda"
+    }
+  ],
+  "figma": {
+    "mode": "host-mcp",
+    "version": "record-host-plugin-version-at-validation",
+    "connection": "not-checked"
+  },
+  "notes": [
+    "Upstream content is not redistributed or modified.",
+    "Only entry file hashes are pinned; transitive assets and behavior remain unverified.",
+    "No automatic dependency installation or background upgrades."
+  ]
+}
