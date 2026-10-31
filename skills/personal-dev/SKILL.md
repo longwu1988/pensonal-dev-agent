@@ -1,11 +1,13 @@
 ---
 name: personal-dev
-description: Use when starting a project, implementing a tracked feature, fixing a bug, or preparing delivery in a project using the personal development system. Not for concept-only questions or unrelated tasks.
+description: Use when starting a project, implementing a tracked feature, fixing a bug, preparing delivery, or starting, stopping, inspecting or resuming an issue queue in a project using the personal development system. Not for concept-only questions or unrelated tasks.
 ---
 
 # 个人开发任务入口
 
 从工程根目录读取 `AGENTS.md` 和 `docs/agents/project.json`；缺失配置时先列出缺口，只补当前阶段必要事实。遵守宿主与用户指令，本技能不授予外部写操作权限。
+
+用户要求开始、结束、查看或续接工单队列时，先读[工单队列](references/issue-queue.md)并进入对应分支；停止优先于更新检查、澄清等待和交付收尾。
 
 新任务首次启用本技能时先按[版本检查与更新选择](references/updates.md)调用检查入口；同一任务续聊不重复检查或更换规则。检查失败沿用已安装版本，不阻塞业务。
 
@@ -16,6 +18,7 @@ description: Use when starting a project, implementing a tracked feature, fixing
 | 任务 | 读取 |
 | --- | --- |
 | 空白工程、大需求、技术栈或架构变化 | [建设与规格](references/planning.md) |
+| 拉取工单、理解评论和截图、续接工单或交付前核对补充 | [工单全文、评论与图片](references/issue-context.md) |
 | 正式功能、局部 Bug、界面实现 | [实施流程](references/implementation.md) |
 | 安装或更新依赖、下载工具链、配置 CI/Docker 构建源 | [依赖下载与镜像](references/dependency-downloads.md) |
 | 配置应用运行密钥，或使用服务器、仓库、设计平台等操作账号 | [运行凭据与 Agent 操作凭据](references/credentials.md) |

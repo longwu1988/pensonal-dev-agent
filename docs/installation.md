@@ -20,7 +20,7 @@ python3 scripts/pda.py doctor --project /path/to/project
 
 | 工程位置 | 归属与行为 |
 | --- | --- |
-| `.agents/skills/personal-dev/` | 安装器管理的唯一 Skill 内容，含分层流程、角色和 scripts 更新运行时 |
+| `.agents/skills/personal-dev/` | 安装器管理的唯一 Skill 内容，含分层流程、角色和 scripts 更新、队列运行时 |
 | `.cursor/rules/personal-dev.mdc` | 安装器管理的 Cursor 入口，只指向共享规则 |
 | 根 `AGENTS.md`、`.gitignore` | 仅维护 personal-dev 标记区；区外原始字节保留 |
 | `docs/agents/README.md` | 配置字段说明，安装器管理 |
@@ -29,6 +29,7 @@ python3 scripts/pda.py doctor --project /path/to/project
 | `docs/agents/personal-dev.lock.json` | 可提交的受管内容摘要及来源 commit；新克隆也能幂等识别 |
 | `.local/agent/install/` | 本地锁与最近一次事务备份，加入 Git 忽略，不提交 |
 | `.local/agent/updates/` | 当前电脑/工程的检查时间、候选、稍后提醒及跳过状态，不提交 |
+| `.local/agent/queue/` | 同仓库主工作目录的队列状态与本机锁；不提交，不随 Git 同步 |
 
 现有应用、MCP、OpenSpec 配置、上游 skills 与业务文件不在本安装器的写入清单内。应用映射从直接子目录的 AGENTS 发现，需人工核对补充；集成分支、仓库、验证命令及环境不猜测。
 
@@ -52,9 +53,9 @@ python3 scripts/pda.py doctor --project /path/to/project
 
 版本固定到 `longwu1988/pensonal-dev-agent` 的 main 完整 commit。开发分支领先 main 时报告 ahead；分叉报告 diverged，不自动降级。检查失败继续本地工作，可显式 `--force` 重查。GitHub 公开 API 无账号依赖但有请求限额，网络和限额问题均不阻塞业务任务；本工具不改 Git 全局配置或自动配置代理。
 
-update 默认下载到系统临时目录并预览，只有 `--apply` 写入。当前本地运行时负责安装，不执行下载的 Python；校验固定提交的 Git blob 摘要、常规文件路径、体积和协议，临时下载退出即清理。将来变更运行时布局、安装语义或不兼容配置时须提高 `profiles/update.json` 的协议版本，并走经过审阅的完整安装器迁移，不让旧 updater 部分安装新运行时。协议 1 的事务模块保持自包含和 journal 格式兼容，保证新旧模块混合时仍可独立恢复。
+update 默认下载到系统临时目录并预览，只有 `--apply` 写入。当前本地运行时负责安装，不执行下载的 Python；校验固定提交的 Git blob 摘要、常规文件路径、体积和协议，临时下载退出即清理。队列新增运行时模块，更新协议已升为 2；协议 1 的 updater 会拒绝这次升级。已有工程需从审阅过的完整源码再执行一次 `init` 预览和 `init --apply`，保留已有 `project.json`、区外规则与权限选择，无需重新初始化配置。协议 2 工程也可重复执行完整安装；受管文件冲突仍按上文处理，禁止删除 lock 绕过。协议 2 事务模块保持自包含，可处理新增文件的恢复记录。协议 1 的旧事务模块不识别新增队列文件：若这次升级或恢复中途退出，须使用已审阅的完整协议 2 源码执行 `python3 scripts/pda.py recover --project /path/to/project --apply`，不能依赖尚未替换或已回退的旧版安装入口。以后改变运行时布局、安装语义或不兼容配置时同样须提高协议并提供完整迁移。
 
-安装事务包含运行时和来源记录，因此 recover 会同时恢复版本；它不会恢复提醒偏好。更新期间 main 前进不改变用户选定候选，工程配置继续由工程维护。应用后新任务加载新规则，宿主自动发现、热重载及跨工具会话仍需单独验收。安装 runtime 只提供 update/check/choice/recover；init 和 doctor 仍从完整源码目录调用。
+安装事务包含运行时和来源记录，因此 recover 会同时恢复版本；它不会恢复提醒偏好或队列状态。更新期间 main 前进不改变用户选定候选，工程配置继续由工程维护。应用后新任务加载新规则，宿主自动发现、热重载及跨工具会话仍需单独验收。安装 runtime 提供更新检查、更新选择、恢复及队列控制；init 和 doctor 仍从完整源码目录调用。
 
 写入前生成本地备份，每个文件原子替换。正常失败留下 prepared 状态，后续安装要求先恢复：
 
@@ -66,6 +67,12 @@ python3 scripts/pda.py recover --project /path/to/project --apply
 恢复只针对最近一次有变化的安装，预检所有内容和权限后回到该次写入前；重复安装无变化时不覆盖备份。安装后用户再编辑目标文件或权限时，恢复会拒绝覆盖，需人工处理。恢复中再次失败可重试。保留既有目录和本地日志；恢复了原 .gitignore 后，本地日志可能不再被忽略，仍不得提交。
 
 备份可能含原有规则与配置，权限为 0600，按本地敏感文件管理。升级成功会替换上一次备份，长期版本回退依赖 Git 历史；不承诺跨文件断电原子性或与外部编辑器并发修改的安全合并。
+
+## 工单队列接入
+
+完整安装协议 2 后，按[工单队列](../skills/personal-dev/references/issue-queue.md)核对仓库、集成分支、权限与认证，再由用户明确开始。安装本身保持队列关闭；没有后台任务或自动启动。命令、领取条件、远端控制分支副作用及恢复方式均以该文档为准。
+
+HTTP 读取支持 Gitea 与 github.com，使用 `PDA_GITEA_TOKEN` / `PDA_GITHUB_TOKEN` 或工程明确配置的 Agent 操作凭据来源；Git 推送使用现有 Git 登录。MCP 内部 OAuth 不会自动传给 CLI，工单评论、标签和关单仍由 Agent 使用已授权工具完成。此能力尚待真实仓库及两端会话验收。
 
 ## 检查范围与限制
 

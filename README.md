@@ -10,6 +10,7 @@
 - 第一版目标工具：Codex、Cursor；Claude 暂不纳入实施和验收。两端适配均待验证。
 - `scripts/pda.py` 提供预览、安装、只读检查和恢复；使用 Python 3.9+ 标准库，目前验证 macOS，Linux 尚未实测，Windows 不支持。
 - 完整安装额外提供按工程检查 main 更新、稍后提醒、跳过版本及固定提交升级；由新任务入口调用，没有后台调度或宿主启动钩子。用法与边界见 [更新说明](docs/installation.md#按工程检查与选择更新)。
+- 工单队列为默认关闭的会话内试验能力：用户明确开始后，由当前 Agent 串行处理符合条件的 `ai-ready` 工单；脚本负责状态与仓库占用。真实仓库连续执行及 Codex/Cursor 会话验收仍待完成，用法见[工单队列](skills/personal-dev/references/issue-queue.md)。
 - `skills/personal-dev/` 提供任务路由及协调/执行/审查职责。角色是可读职责定义，不是自动启动的宿主原生 Agent。
 - `main` 是工程接入与更新检查的入口；当前仍为试验能力，尚无 npm 包或稳定发布 Tag。
 - 完整接入使用本地脚本，见 [安装与验证](docs/installation.md)。单独安装 Skill 不会安装依赖或初始化工程；本轮未验证 npx skills 分发。
@@ -29,6 +30,7 @@
 | 知识沉淀、夜间报告与人工审查 | [复盘规范](openspec/changes/development-system-v0-1/specs/knowledge-retrospective/spec.md) |
 | 设计基线任务 | [阶段 1](openspec/changes/development-system-v0-1/tasks.md) |
 | 最小接入实现与验证 | [阶段 2](openspec/changes/development-system-v0-1/implementation.md) |
+| 用户控制的工单队列 | [队列变更](openspec/changes/issue-queue/proposal.md) |
 
 以上是完整体系的目标要求，部分已由最小接入实现；尚未完成全部验收，不归档为已交付的长期规范。
 

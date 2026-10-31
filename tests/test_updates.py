@@ -64,6 +64,16 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('check-update', result.stdout)
 
+    def test_queue_runtime_is_installed_and_runs_without_source_checkout(self):
+        for name in ('issue_queue', 'issue_tracker'):
+            self.assertTrue((self.root / ('.agents/skills/personal-dev/scripts/pda/' + name + '.py')).is_file())
+        subprocess.run(['git', 'init', str(self.root)], check=True, capture_output=True)
+        cli = self.root / '.agents/skills/personal-dev/scripts/pda.py'
+        result = subprocess.run([sys.executable, str(cli), 'queue-status', '--project', str(self.root)],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(json.loads(result.stdout)['enabled'])
+
     def test_dirty_source_does_not_claim_clean_commit(self):
         path = self.package / 'skills/personal-dev/SKILL.md'
         path.write_text(path.read_text() + '\nLocal change\n')
@@ -174,6 +184,34 @@ class UpdateTests(unittest.TestCase):
             result = subprocess.run([sys.executable, str(cli), *extra, '--project', str(self.root), '--apply'], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(self.snapshot(), before)
+
+    def test_protocol_one_migration_interruption_recovers_with_full_new_source(self):
+        from pda.transaction import apply_changes, atomic_write
+        prefix = '.agents/skills/personal-dev/scripts/pda/'
+        trans = prefix + 'transaction.py'
+        added = prefix + 'issue_queue.py'
+        new_trans = (self.root / trans).read_bytes()
+        old_trans = new_trans.replace(b", 'issue_queue', 'issue_tracker'", b'')
+        (self.root / trans).write_bytes(old_trans)
+        (self.root / added).unlink()
+        before = self.snapshot()
+        changes = [dict(path=added, before=None, after=b'# synthetic new runtime'),
+                   dict(path=trans, before=old_trans, after=new_trans)]
+        def fail(root, name, content, file_mode=0o644):
+            if name == trans: raise OSError('interrupted before replacing old runtime')
+            atomic_write(root, name, content, file_mode)
+        with patch('pda.transaction.atomic_write', side_effect=fail):
+            with self.assertRaises(InstallError): apply_changes(self.root, changes)
+        old_result = subprocess.run([sys.executable, str(self.root / trans), '--project', str(self.root), '--apply'],
+                                    capture_output=True, text=True)
+        self.assertNotEqual(old_result.returncode, 0)
+        self.assertIn('unexpected recovery target', old_result.stderr)
+        result = subprocess.run([sys.executable, str(REPO / 'scripts/pda.py'), 'recover',
+                                 '--project', str(self.root), '--apply'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.snapshot(), before)
+        recover(self.root, True)
+        self.assertEqual(self.snapshot(), before)
 
     def test_apply_rechecks_edits_made_after_preview(self):
         from pda.updates import update
