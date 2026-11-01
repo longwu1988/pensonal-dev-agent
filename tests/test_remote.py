@@ -143,5 +143,17 @@ class DownloadTests(unittest.TestCase):
                 with remote.download('a' * 40): self.fail('missing audio accepted')
 
 
+    def test_protocol_four_refuses_partial_worker_upgrade(self):
+        files, tree = self.payload()
+        added = {'scripts/pda/'+name+'.py' for name in ('issue_claims','issue_workers','worker_dispatch')}
+        old_runtime = tuple(name for name in remote.RUNTIME if name not in added)
+        with patch.object(remote, 'RUNTIME', old_runtime), patch.object(remote.Client, 'get', return_value=tree):
+            with self.assertRaisesRegex(InstallError, 'runtime'):
+                with remote.download('a'*40): self.fail('partial worker runtime accepted')
+        with patch.object(remote, 'PROTOCOL', 4), patch.object(remote.Client, 'get', side_effect=[tree, self.archive(files)]):
+            with self.assertRaisesRegex(InstallError, 'protocol'):
+                with remote.download('a'*40): self.fail('old protocol accepted worker update')
+
+
 if __name__ == '__main__':
     unittest.main()

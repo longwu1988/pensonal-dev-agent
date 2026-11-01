@@ -7,11 +7,13 @@ from contextlib import contextmanager
 import fcntl
 import json
 import os
+import re
 import time
 import uuid
 
-from .issue_queue import Queue, QueueBusy, QueueConflict, configuration, git, main_project
+from .issue_queue import QueueBusy, QueueConflict, configuration, git, main_project
 from .issue_tracker import TrackerAccessDenied
+from .issue_workers import WorkerQueue as Queue
 from .transaction import InstallError, atomic_write, json_bytes, read, safe_path
 
 DIRECTORY = '.local/agent/watch'
@@ -80,8 +82,14 @@ class Watch:
             if queue['repository'] and (queue['repository'] != self.queue.tracker.repository
                                       or queue['integration_branch'] != self.queue.branch):
                 raise InstallError('queue binding changed; reconcile saved work first')
+            # A worker's stop token is scoped to its owner even when its queue is empty.
+            # Keep that namespace; the fresh generation still revokes every old wakeup.
+            owner = queue.get('owner') if queue.get('version') == 2 else None
+            owner = owner or 'watch-' + uuid.uuid4().hex
+            if queue.get('version') == 2:
+                self.queue.owner = owner
             state = dict(version=1, status='pending', generation=uuid.uuid4().hex,
-                         thread=thread, owner='watch-' + uuid.uuid4().hex, scheduler_id=None,
+                         thread=thread, owner=owner, scheduler_id=None,
                          repository=self.queue.tracker.repository, integration_branch=self.queue.branch,
                          interval=interval, next_due=0, failures=0, stop_ack=acknowledged)
             self._save(state)
@@ -159,10 +167,26 @@ def dispatch(root, args):
     root = main_project(root)
     queue = Queue(root)
     watch = Watch(queue)
+    # Resolve the bound worker for stop tokens before any action, including status.
+    saved = read(root, STATE)
+    if saved is not None:
+        try:
+            value = json.loads(saved)
+            if (not isinstance(value, dict) or not isinstance(value.get('owner'), str)
+                    or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', value['owner'])):
+                raise ValueError()
+            queue.owner = value['owner']
+        except (ValueError, TypeError, UnicodeError, RecursionError):
+            raise InstallError('invalid watch owner; preserve state and reconcile; queue-stop --all explicitly stops all local workers') from None
     action = args.action.split('-', 1)[1]
     if action == 'status': return watch.status()
     if action == 'stop':
-        # Latch first even if watch/config is malformed; host scheduler must also be paused.
+        # No bound watch must never fall back to a global manual-worker stop.
+        if saved is None:
+            return {'status': 'off', 'scheduler_cleanup_required': True}
+        from .worker_dispatch import validate_storage
+        validate_storage(root, queue)
+        # A valid owner can be stopped even if the rest of watch/config is malformed.
         result = queue.stop()
         return {'status': 'stopped', 'queue': result, 'scheduler_cleanup_required': True}
     try:
@@ -178,6 +202,11 @@ def dispatch(root, args):
     if any(config.get('permissions', {}).get(key) is not True for key in ('push_task_branch', 'write_issue')):
         if action in ('tick', 'bind'): watch.suspend()
         raise InstallError('record existing queue permissions before enabling or continuing watch')
+    # Choose the initial namespace before validating every actual worker write path.
+    if action == 'start' and queue.owner is None:
+        queue.owner = 'watch-' + uuid.uuid4().hex
+    from .worker_dispatch import validate_storage
+    validate_storage(root, queue)
     for directory in (DIRECTORY, '.local/agent/queue'):
         if git(root, 'ls-files', '--', directory): raise InstallError('watch/queue state must not be Git-tracked')
     for target in (STATE, LOCK, '.local/agent/queue/state.json', '.local/agent/queue/write.lock', '.local/agent/queue/stop'):
@@ -192,7 +221,8 @@ def dispatch(root, args):
     except InstallError:
         if action in ('tick', 'bind'): watch.suspend()
         raise
-    queue.lease, queue.branch = GitLease(root, repository), branch
+    from .issue_claims import Claims
+    queue.lease, queue.branch, queue.claims = GitLease(root, repository), branch, Claims(root, repository)
     if action == 'start': return watch.start(args.thread, 300 if args.interval is None else args.interval)
     if action == 'bind': return watch.bind(args.generation, args.scheduler)
     if action == 'tick': return watch.tick(args.generation, args.scheduler, args.thread)

@@ -4,9 +4,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
 CLI = REPO / 'scripts/pda.py'
+sys.path.insert(0,str(REPO/'scripts'))
 
 class QueueCLITests(unittest.TestCase):
     def setUp(self):
@@ -103,7 +106,8 @@ class QueueCLITests(unittest.TestCase):
         r = self.run_cli('delivery-check', '--issue', '3', '--commit', 'a'*40)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('missing delivery record', r.stderr)
-        state = json.loads(self.run_cli('queue-status').stdout)
+        from pda.issue_queue import Queue
+        state = Queue(self.root).status()
         state['current'] = {'number': 3, 'stage': 'ready_to_merge'}
         path = self.root / '.local/agent/queue/state.json'
         path.parent.mkdir(parents=True); path.write_text(json.dumps(state))
@@ -191,5 +195,183 @@ class QueueCLITests(unittest.TestCase):
         r = self.run_cli('watch-tick', '--generation', pending['generation'], '--scheduler', 'synthetic-schedule', '--thread', 'synthetic')
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('revoked', r.stderr)
+
+    def checkpoint_fixture(self, stage='ready_to_merge', commit='a'*40):
+        from pda.issue_workers import WorkerQueue
+        path = self.root / 'docs/agents/project.json'
+        config = json.loads(path.read_text())
+        config['permissions'].update(push_task_branch=True, write_issue=True)
+        path.write_text(json.dumps(config))
+        worker = WorkerQueue(self.root, owner='synthetic')
+        state = worker.status()
+        state.update(enabled=True, repository='https://git.example.invalid/team/project',
+                     integration_branch='main', current={'number': 3, 'stage': stage, 'commit': commit})
+        worker._save(state)
+        return SimpleNamespace(action='queue-checkpoint', owner='synthetic', apply=False,
+                               stage='implementing', branch=None, worktree=None, commit='c'*40)
+
+    def test_checkpoint_invalidation_checks_record_lock_and_archive_before_remote(self):
+        from pda.worker_dispatch import dispatch
+        from pda.transaction import InstallError
+        args = self.checkpoint_fixture()
+        result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'b'*40,
+                              '--stage', 'accepted', '--evidence', 'synthetic accepted revision')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.root / '.local/agent/delivery/3.json'
+        before = state.read_bytes()
+        worker_rules = '/.local/agent/workers/\n/.local/agent/queue/\n'
+        for rules in ('/.local/agent/delivery/write.lock\n',
+                      '/.local/agent/delivery/*.json\n',
+                      '/.local/agent/delivery/*.json\n/.local/agent/delivery/write.lock\n'):
+            with self.subTest(rules=rules):
+                (self.root / '.gitignore').write_text(worker_rules + rules)
+                with mock.patch('pda.worker_dispatch.Tracker') as tracker, \
+                        mock.patch('pda.issue_workers.WorkerQueue.checkpoint', return_value={}) as checkpoint:
+                    with self.assertRaisesRegex(InstallError, 'Git-ignored'):
+                        dispatch(self.root, args)
+                    tracker.assert_not_called()
+                    checkpoint.assert_not_called()
+                self.assertEqual(state.read_bytes(), before)
+                self.assertFalse((state.parent / 'archive').exists())
+
+    def test_checkpoint_invalidation_rejects_tracked_delivery_data(self):
+        from pda.worker_dispatch import dispatch
+        from pda.transaction import InstallError
+        args = self.checkpoint_fixture(stage='implementing')
+        args.stage = 'waiting_user'
+        result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'a'*40,
+                              '--stage', 'accepted', '--evidence', 'synthetic')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.root / '.local/agent/delivery/3.json'
+        before = state.read_bytes()
+        subprocess.run(['git','-C',str(self.root),'add','-f',str(state)],check=True,capture_output=True)
+        with mock.patch('pda.worker_dispatch.Tracker') as tracker, \
+                mock.patch('pda.issue_workers.WorkerQueue.checkpoint', return_value={}) as checkpoint:
+            with self.assertRaisesRegex(InstallError, 'Git-tracked'):
+                dispatch(self.root, args)
+            tracker.assert_not_called()
+            checkpoint.assert_not_called()
+        self.assertEqual(state.read_bytes(), before)
+
+    def test_checkpoint_storage_uses_current_commit_not_requested_new_commit(self):
+        from pda.worker_dispatch import dispatch
+        args = self.checkpoint_fixture()
+        result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'a'*40,
+                              '--stage', 'accepted', '--evidence', 'synthetic')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # The invalidation writes current.commit (a), not the requested next commit (c).
+        (self.root / '.gitignore').write_text('/.local/agent/workers/\n/.local/agent/queue/\n'
+            '/.local/agent/delivery/*.json\n/.local/agent/delivery/write.lock\n')
+        with mock.patch('pda.worker_dispatch.Tracker'), \
+                mock.patch('pda.issue_workers.WorkerQueue._owned', return_value={'number': 3, 'stage': 'ready_to_merge', 'commit': 'a'*40}), \
+                mock.patch('pda.issue_workers.WorkerQueue.checkpoint', return_value={'status': 'checkpoint'}) as checkpoint:
+            self.assertEqual(dispatch(self.root, args)['status'], 'checkpoint')
+            checkpoint.assert_called_once()
+
+    def test_checkpoint_validates_remote_record_after_local_snapshot_becomes_stale(self):
+        from pda.worker_dispatch import dispatch
+        from pda.transaction import InstallError
+        # A prior remote checkpoint succeeded, but label sync failed before local state saved.
+        remote = {'number': 3, 'stage': 'ready_to_merge', 'commit': 'b'*40}
+        for local_stage, next_stage in (('implementing', 'implementing'),
+                                         ('ready_to_merge', 'waiting_user')):
+            with self.subTest(local_stage=local_stage, next_stage=next_stage):
+                (self.root / '.gitignore').write_text('/.local/agent/\n')
+                args = self.checkpoint_fixture(stage=local_stage, commit='a'*40)
+                args.stage = next_stage
+                result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'a'*40,
+                                      '--stage', 'accepted', '--evidence', 'synthetic')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                state = self.root / '.local/agent/delivery/3.json'
+                before = state.read_bytes()
+                (self.root / '.gitignore').write_text('/.local/agent/workers/\n/.local/agent/queue/\n'
+                    '/.local/agent/delivery/*.json\n/.local/agent/delivery/write.lock\n')
+                with mock.patch('pda.worker_dispatch.Tracker'), \
+                        mock.patch('pda.issue_workers.WorkerQueue._owned', return_value=remote), \
+                        mock.patch('pda.issue_workers.WorkerQueue.checkpoint', return_value={}) as checkpoint:
+                    with self.assertRaisesRegex(InstallError, 'Git-ignored'):
+                        dispatch(self.root, args)
+                    checkpoint.assert_not_called()
+                self.assertEqual(state.read_bytes(), before)
+                self.assertFalse((state.parent / 'archive').exists())
+
+    def retry_fixture(self):
+        from pda.issue_workers import WorkerQueue
+        self.checkpoint_fixture()
+        worker = WorkerQueue(self.root, owner='synthetic')
+        state = worker.status(); state['current'] = None; worker._save(state)
+        return SimpleNamespace(action='queue-retry', owner='synthetic', apply=False, issue=3)
+
+    def test_retry_invalidation_requires_ignored_existing_proof_and_lock(self):
+        from pda.worker_dispatch import dispatch
+        from pda.transaction import InstallError
+        args = self.retry_fixture()
+        result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'b'*40,
+                              '--stage', 'accepted', '--evidence', 'old completed proof')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.root / '.local/agent/delivery/3.json'; before = state.read_bytes()
+        base = '/.local/agent/workers/\n/.local/agent/queue/\n'
+        for rules in ('/.local/agent/delivery/write.lock\n', '/.local/agent/delivery/*.json\n'):
+            with self.subTest(rules=rules):
+                (self.root / '.gitignore').write_text(base + rules)
+                with mock.patch('pda.worker_dispatch.Tracker') as tracker, \
+                        mock.patch('pda.issue_workers.WorkerQueue.retry', return_value={}) as retry:
+                    with self.assertRaisesRegex(InstallError, 'Git-ignored'):
+                        dispatch(self.root, args)
+                    tracker.assert_not_called(); retry.assert_not_called()
+                self.assertEqual(state.read_bytes(), before)
+
+    def test_retry_invalidation_rejects_tracked_proof(self):
+        from pda.worker_dispatch import dispatch
+        from pda.transaction import InstallError
+        args = self.retry_fixture()
+        result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'b'*40,
+                              '--stage', 'accepted', '--evidence', 'old completed proof')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.root / '.local/agent/delivery/3.json'; before = state.read_bytes()
+        subprocess.run(['git','-C',str(self.root),'add','-f',str(state)],check=True,capture_output=True)
+        with mock.patch('pda.worker_dispatch.Tracker') as tracker, \
+                mock.patch('pda.issue_workers.WorkerQueue.retry', return_value={}) as retry:
+            with self.assertRaisesRegex(InstallError, 'Git-tracked'):
+                dispatch(self.root, args)
+            tracker.assert_not_called(); retry.assert_not_called()
+        self.assertEqual(state.read_bytes(), before)
+
+    def test_retry_uses_existing_proof_commit_without_requiring_archive(self):
+        from pda.worker_dispatch import dispatch
+        args = self.retry_fixture()
+        result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'b'*40,
+                              '--stage', 'accepted', '--evidence', 'old completed proof')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (self.root / '.gitignore').write_text('/.local/agent/workers/\n/.local/agent/queue/\n'
+            '/.local/agent/delivery/*.json\n/.local/agent/delivery/write.lock\n')
+        with mock.patch('pda.worker_dispatch.Tracker'), \
+                mock.patch('pda.issue_workers.WorkerQueue.retry', return_value={'status': 'retry'}) as retry:
+            self.assertEqual(dispatch(self.root, args)['status'], 'retry')
+            retry.assert_called_once_with(3)
+
+    def test_transfer_preview_names_source_and_target_and_writes_nothing(self):
+        result = self.run_cli('queue-transfer', '--owner', 'source', '--target-owner', 'target',
+                              '--evidence', 'user requested transfer')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        preview = json.loads(result.stdout)
+        self.assertEqual(preview['source_owner'], 'source')
+        self.assertEqual(preview['target_owner'], 'target')
+        self.assertIn('transfer', preview['effect'])
+        self.assertFalse((self.root / '.local').exists())
+
+    def test_worker_status_stop_and_direct_claim_arguments(self):
+        r=self.run_cli('queue-status','--owner','a')
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertEqual(json.loads(r.stdout)['owner'],'a')
+        r=self.run_cli('queue-stop','--owner','a')
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertTrue((self.root/'.local/agent/workers/a/stop').exists())
+        self.assertFalse((self.root/'.local/agent/queue/stop').exists())
+        self.assertNotEqual(self.run_cli('queue-claim','--issue','1').returncode,0)
+        self.assertNotEqual(self.run_cli('queue-resource-acquire','--owner','a').returncode,0)
+        r=self.run_cli('queue-stop','--all')
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertTrue((self.root/'.local/agent/queue/stop').exists())
 
 if __name__=='__main__': unittest.main()
