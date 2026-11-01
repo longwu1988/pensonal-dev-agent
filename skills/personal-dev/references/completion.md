@@ -1,6 +1,6 @@
 # 工单收尾记录与完成检查
 
-普通单工单与队列共同遵循本规则。用户确认测试通过、要求提交/push/合并，或从中断继续时，先恢复当前任务的工单与未完成阶段，再执行[交付流程](delivery.md)。不能把一句“push”当作忘掉原任务的理由；已有自动收尾授权继续适用。用户明确“只推送、不要关单”、等待、失败或停止时按新指令保留待办，不越权收尾，不恢复已停止的队列。
+普通单工单与队列共同遵循本规则。所有新版工单均先按[工单占用](issue-claims.md)领取，续接时核对真实 owner，不能仅凭编号补写其他会话的收尾。用户确认测试通过、要求提交/push/合并，或从中断继续时，先恢复当前任务的工单与未完成阶段，再执行[交付流程](delivery.md)。不能把一句“push”当作忘掉原任务的理由；已有自动收尾授权继续适用。用户明确“只推送、不要关单”、等待、失败或停止时按新指令保留待办，不越权收尾，不恢复已停止的队列。
 
 ## 关联与进度
 
@@ -39,7 +39,7 @@ python3 .agents/skills/personal-dev/scripts/pda.py delivery-record --project . -
 
 评论或关单请求超时、执行中断时，先重新读取评论与工单状态。已有相同评论则复用，不盲目重发；已关闭则核对依据，不重新打开再关闭。仍开放且所有条件满足时继续关单；无法确认结果或内容有新失败反馈时保持“待核对/待修复”。若用户已停止，保存剩余动作，不为了完成记录继续外部写入。
 
-关闭后必须再次读取远端工单，确认 `state=closed`。完整安装的普通单工单执行：
+关闭后必须再次读取远端工单，确认 `state=closed`。新版普通单与自动队列都通过当前 owner 的 `queue-finish` 完成；此前未建立远端占用的遗留单才允许以下兼容核验：
 
 ```sh
 python3 .agents/skills/personal-dev/scripts/pda.py delivery-check --project . --issue 23 --commit FULL_40_CHARACTER_FINAL_SHA
@@ -47,11 +47,11 @@ python3 .agents/skills/personal-dev/scripts/pda.py delivery-check --project . --
 
 该命令检查五项证据存在且绑定最终提交，再实时检查提交可达远端集成分支、读取工单确认关闭；仅本次返回 `verified` 才算脚本核验成功。它不执行测试、不判断证据文字真实性、不授予权限，也不自动推送、写评论、关单或启动服务。PR 是否实际合并及目标是否正确也不由该命令检查，须由 Agent 调用平台读取并保存证据；不得仅凭 verified 宣称 PR 已合并。最终内容、实际运行环境与工单最新评论仍由 Agent 按交付规则判断。
 
-队列沿用 `queue-guard` 和停止优先规则，阶段证据同样用 `delivery-record` 保存，最后由 **`queue-finish` 内部执行同一检查**；当前队列单不能改用 `delivery-check` 绕过 owner/停止控制。旧队列已有进度而缺记录时，从真实证据补齐，不重新开发或伪造验收。若远端已关闭而 `queue-next` 提示核对，先核对交付事实，在用户已明确续接及有效 owner/占用下直接补齐记录并 `queue-finish`。
+普通已领取工单与队列均沿用 `queue-guard` 和停止优先规则，阶段证据用 `delivery-record` 保存；先取得同提交的 accepted 和 integration_verified 后进入 ready_to_merge，再取得集成锁进入 merging，最后由 **`queue-finish` 内部执行同一完成检查**。不能改用 `delivery-check` 绕过 owner/停止控制。旧任务缺记录时，从真实证据补齐，不重新开发或伪造验收。远端已关闭或 done 但本地仍有 current，领取/续接返回 finishing 时先核对已完成事实，在有效 owner 与续接授权下只补收尾。finish 成功才记远端 done、同步 ai-done 并清 current；标签/资源释放中断仍保留 current，重试继续原收尾，不重新执行开发。
 
 ## Worktree 收尾
 
-完成检查成功后按[worktree 生命周期](worktree-lifecycle.md)尝试清理并保存结果。队列在 queue-finish 清空 current 之前先把路径、分支和提交登记到主目录台账；成功后通过 queue-cleanup-guard 检查再清理，完成或记明保留原因后才领取下一单。清理失败不回滚已完成的交付或重开工单；收到用户停止则保留，不为清理重新启动队列。
+完成检查成功后按[worktree 生命周期](worktree-lifecycle.md)尝试清理并保存结果。所有已领取任务在 queue-finish 清空 current 之前先把路径、分支和提交登记到主目录台账；成功后通过 queue-cleanup-guard 检查再清理，完成或记明保留原因后才领取下一单。清理失败不回滚已完成的交付或重开工单；收到用户停止则保留，不为清理重新启动队列。
 
 ## 最终回复与完成边界
 

@@ -85,9 +85,14 @@ class GitLease:
         self._validate()
         git(self.root, 'check-ref-format', '--branch', branch)
         if branch.startswith('-'): raise InstallError('invalid integration branch')
-        git(self.root, 'fetch', '--no-tags', 'origin', 'refs/heads/' + branch)
+        ref = 'refs/heads/' + branch
+        fields = git(self.root, 'ls-remote', '--refs', 'origin', ref).split()
+        if len(fields) != 2 or fields[1] != ref or not re.fullmatch('[0-9a-f]{40}', fields[0]):
+            raise InstallError('integration branch snapshot unavailable')
+        target = fields[0]
+        git(self.root, 'fetch', '--no-tags', '--no-write-fetch-head', 'origin', target)
         try:
-            git(self.root, 'merge-base', '--is-ancestor', commit, 'FETCH_HEAD')
+            git(self.root, 'merge-base', '--is-ancestor', commit, target)
             return True
         except InstallError:
             return False

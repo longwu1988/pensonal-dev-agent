@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'scripts'))
+from pda.source import PROTOCOL
 from pda.install import initialize, MANIFEST
 from pda.transaction import InstallError, recover
 
@@ -297,7 +298,7 @@ class UpdateTests(unittest.TestCase):
         (old_package / 'scripts/pda/notifications.py').unlink()
         (old_package / 'skills/personal-dev/assets/question-pending.wav').unlink()
         source = old_package / 'scripts/pda/source.py'
-        source.write_text(source.read_text().replace('PROTOCOL = 4', 'PROTOCOL = 3'))
+        source.write_text(source.read_text().replace('PROTOCOL = ' + str(PROTOCOL), 'PROTOCOL = 3'))
         (old_package / 'profiles/update.json').write_text('{"protocol":3}')
         project = self.base / 'old-audio-project'; project.mkdir()
         result = subprocess.run([sys.executable, str(old_package / 'scripts/pda.py'), 'init',
@@ -366,6 +367,56 @@ class UpdateTests(unittest.TestCase):
             with self.assertRaises(InstallError):
                 update(self.root, self.new, apply=True)
         self.assertEqual(self.snapshot(), before)
+
+    def test_protocol_four_to_workers_preserves_all_progress_and_repeats(self):
+        old_package=self.base/'old-workers-package'
+        shutil.copytree(self.package,old_package,ignore=shutil.ignore_patterns('.git','__pycache__'))
+        trans=old_package/'scripts/pda/transaction.py'
+        text=trans.read_text()
+        for name in ('issue_claims','issue_workers','worker_dispatch'):
+            text=text.replace(", '"+name+"'",'')
+            (old_package/('scripts/pda/'+name+'.py')).unlink()
+        trans.write_text(text)
+        source=old_package/'scripts/pda/source.py'
+        source.write_text(source.read_text().replace('PROTOCOL = '+str(PROTOCOL),'PROTOCOL = 4'))
+        (old_package/'profiles/update.json').write_text('{"protocol":4}')
+        project=self.base/'old-workers-project'; project.mkdir()
+        result=subprocess.run([sys.executable,str(old_package/'scripts/pda.py'),'init','--project',str(project),'--apply'],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        paths=['docs/agents/project.json','AGENTS.md']
+        for name in ('queue/state.json','workers/owner/state.json','delivery/1.json','watch/state.json'):
+            relative='.local/agent/'+name
+            path=project/relative; path.parent.mkdir(parents=True,exist_ok=True); path.write_text('{"synthetic":"keep"}')
+            paths.append(relative)
+        before={p:(project/p).read_bytes() for p in paths}
+        for apply in (False,True,True):
+            initialize(project,REPO,apply)
+            self.assertEqual(before,{p:(project/p).read_bytes() for p in paths})
+        for name in ('issue_claims','issue_workers','worker_dispatch'):
+            self.assertEqual((project/('.agents/skills/personal-dev/scripts/pda/'+name+'.py')).read_bytes(),
+                             (REPO/('scripts/pda/'+name+'.py')).read_bytes())
+
+    def test_worker_runtime_interrupted_upgrade_recovers_with_new_source(self):
+        from pda.transaction import apply_changes,atomic_write
+        prefix='.agents/skills/personal-dev/'
+        trans=prefix+'scripts/pda/transaction.py'
+        runtime=prefix+'scripts/pda/issue_workers.py'
+        new=(self.root/trans).read_bytes()
+        old=new.replace(b", 'issue_claims'",b'').replace(b", 'issue_workers'",b'').replace(b", 'worker_dispatch'",b'')
+        (self.root/trans).write_bytes(old)
+        data=(self.root/runtime).read_bytes();(self.root/runtime).unlink()
+        before=self.snapshot()
+        changes=[dict(path=runtime,before=None,after=data),dict(path=trans,before=old,after=new)]
+        def interrupt(root,name,content,file_mode=0o644):
+            if name==trans: raise OSError('interrupted worker migration')
+            atomic_write(root,name,content,file_mode)
+        with patch('pda.transaction.atomic_write',side_effect=interrupt):
+            with self.assertRaises(InstallError): apply_changes(self.root,changes)
+        old_result=subprocess.run([sys.executable,str(self.root/trans),'--project',str(self.root),'--apply'],capture_output=True,text=True)
+        self.assertNotEqual(old_result.returncode,0)
+        result=subprocess.run([sys.executable,str(REPO/'scripts/pda.py'),'recover','--project',str(self.root),'--apply'],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(self.snapshot(),before)
 
 
 if __name__ == '__main__':

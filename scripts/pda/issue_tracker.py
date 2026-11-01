@@ -1,4 +1,4 @@
-"""Bounded read-only issue APIs. Remote bodies are untrusted data, never commands."""
+"""Bounded issue reads and explicit stage-label writes; remote bodies are untrusted."""
 import base64
 from http.client import HTTPException
 import json
@@ -69,11 +69,19 @@ MAX_CREDENTIAL_BYTES = 64 * 1024
 REQUEST_TIMEOUT = 10
 OPERATION_TIMEOUT = 60
 PAGE_SIZE = 100
+STAGE_LABELS = frozenset(('ai-ready', 'ai-in-progress', 'ai-testing', 'ai-waiting-user',
+                          'ai-ready-to-merge', 'ai-merging', 'ai-done', 'ai-blocked'))
 
 
 class TrackerAccessDenied(InstallError):
     """Authentication/permission denial needs explicit reconciliation."""
     pass
+
+
+class TrackerHTTPFailure(InstallError):
+    def __init__(self, status):
+        super().__init__('issue tracker HTTP request failed')
+        self.status = status
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -89,7 +97,7 @@ def _credential_text(value):
 
 
 class Tracker:
-    """Read one configured repository; credentials never follow remote-provided links."""
+    """Access one configured repository; credentials never follow remote-provided links."""
 
     def __init__(self, kind, repository, root: Path, credentials_path=None):
         if kind not in ('gitea', 'github'):
@@ -170,7 +178,7 @@ class Tracker:
             raise InstallError('issue tracker operation time limit exceeded')
         return min(REQUEST_TIMEOUT, remaining)
 
-    def _request(self, suffix, budget, query=None):
+    def _request(self, suffix, budget, query=None, *, method='GET', data=None, success=(200,)):
         url = self.api + suffix
         if query:
             url += '?' + urlencode(query)
@@ -179,11 +187,14 @@ class Tracker:
             headers.update({'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'})
         if self._authorization:
             headers['Authorization'] = self._authorization
-        request = Request(url, headers=headers, method='GET')
+        if data is not None:
+            headers['Content-Type'] = 'application/json'
+        request = Request(url, headers=headers, method=method,
+                          data=json.dumps(data).encode() if data is not None else None)
         try:
             opener = build_opener(NoRedirect(), HTTPSHandler(context=ssl.create_default_context()))
             with opener.open(request, timeout=self._remaining(budget)) as response:
-                if response.status != 200:
+                if response.status not in success:
                     raise InstallError('issue tracker returned an unsuccessful status')
                 length = response.headers.get('Content-Length')
                 if length is not None and int(length) > MAX_RESPONSE_BYTES:
@@ -200,14 +211,15 @@ class Tracker:
                     if size > MAX_RESPONSE_BYTES or budget[1] > MAX_TOTAL_BYTES:
                         raise InstallError('issue tracker response size limit exceeded')
                     chunks.append(chunk)
-                return json.loads(b''.join(chunks))
+                raw = b''.join(chunks)
+                return None if response.status == 204 and not raw else json.loads(raw)
         except InstallError:
             raise
         except HTTPError as error:
             error.close()
             if error.code in (401, 403):
                 raise TrackerAccessDenied('issue tracker access denied; verify authentication and permission') from None
-            raise InstallError('issue tracker HTTP request failed') from None
+            raise TrackerHTTPFailure(error.code) from None
         except (OSError, URLError, HTTPException, ValueError, UnicodeError, RecursionError):
             raise InstallError('issue tracker request or response failed') from None
 
@@ -229,6 +241,60 @@ class Tracker:
         """Return open issues; Gitea may include pull_request: null on them."""
         return [item for item in self._pages('/issues', self._budget(), state='open')
                 if item.get('pull_request') is None and item.get('state', 'open') == 'open']
+
+    def _labels(self, suffix, budget):
+        # Gitea paginates repository labels, but not the labels attached to an issue.
+        labels = (self._request(suffix, budget) if self.kind == 'gitea' and suffix.startswith('/issues/')
+                  else self._pages(suffix, budget))
+        if not isinstance(labels, list) or any(
+               not isinstance(item, dict) or not isinstance(item.get('name'), str) or not item['name']
+               or type(item.get('id')) is not int or item['id'] <= 0 for item in labels):
+            raise InstallError('invalid issue tracker label response')
+        return labels
+
+    def set_stage(self, number, label):
+        """Synchronize presentation only; caller must already own the remote issue claim."""
+        if type(number) is not int or number <= 0:
+            raise InstallError('issue number must be a positive integer')
+        if not isinstance(label, str) or label not in STAGE_LABELS:
+            raise InstallError('unsupported issue stage label')
+        budget = self._budget()
+        suffix = '/issues/' + str(number)
+        issue = self._request(suffix, budget)
+        if (not isinstance(issue, dict) or issue.get('number') != number
+                or issue.get('pull_request') is not None):
+            raise InstallError('invalid issue tracker issue response')
+        available = self._labels('/labels', budget)
+        target = [item for item in available if item['name'] == label]
+        if not target:
+            try:
+                created = self._request('/labels', budget, method='POST', success=(201,), data={
+                    'name': label, 'color': '#1d76db' if self.kind == 'gitea' else '1d76db'})
+            except TrackerHTTPFailure as error:
+                # Two different issue owners may create the same repository label.
+                # Only a definite conflict can be reconciled; timeout/denial still fails.
+                if error.status not in (409, 422):
+                    raise
+                target = [item for item in self._labels('/labels', budget) if item['name'] == label]
+            else:
+                target = [created]
+        if (len(target) != 1 or not isinstance(target[0], dict) or target[0].get('name') != label
+                or type(target[0].get('id')) is not int or target[0]['id'] <= 0):
+            raise InstallError('issue tracker stage label creation not confirmed')
+        current = self._labels(suffix + '/labels', budget)
+        if not any(item['name'] == label for item in current):
+            value = target[0]['id'] if self.kind == 'gitea' else label
+            self._request(suffix + '/labels', budget, method='POST', data={'labels': [value]})
+        for item in current:
+            if item['name'] in STAGE_LABELS and item['name'] != label:
+                value = str(item['id']) if self.kind == 'gitea' else item['name']
+                self._request(suffix + '/labels/' + value, budget, method='DELETE',
+                              success=(204,) if self.kind == 'gitea' else (200,))
+        stages = [item['name'] for item in self._labels(suffix + '/labels', budget)
+                  if item['name'] in STAGE_LABELS]
+        if stages != [label]:
+            raise InstallError('issue tracker stage label readback mismatch; reconcile before continuing')
+        return {'number': number, 'label': label}
 
     def issue(self, number):
         """Return the issue and its complete comments_data list as untrusted data."""
