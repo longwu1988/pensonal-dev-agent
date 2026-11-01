@@ -12,6 +12,7 @@
 - 第一版目标工具：Codex、Cursor；Claude 暂不纳入实施和验收。两端适配均待验证。
 - `scripts/pda.py` 提供预览、安装、只读检查和恢复；使用 Python 3.9+ 标准库，目前验证 macOS，Linux 尚未实测，Windows 不支持。
 - 完整安装额外提供按工程检查 main 更新、稍后提醒、跳过版本及固定提交升级；由新任务入口调用，没有后台调度或宿主启动钩子。用法与边界见 [更新说明](docs/installation.md#按工程检查与选择更新)。
+- [三分钟推荐选择](skills/personal-dev/references/planning.md#提问推荐与三分钟默认选择)默认启用，无需逐工程另行开启；保留用户明确关闭及必须等待的约束，不新增外部操作授权或后台计时服务。
 - 正式需求和 Bug [默认通过 PR 合并](skills/personal-dev/references/pull-requests.md)，保留工程明确的直接合并选择；由 Agent 调用平台工具执行，现有 CLI 不自动操作或核验 PR。
 - 普通工单与队列共用本地收尾记录和实时完成检查：验收续聊恢复原工单，推送后继续回写、关闭并读回；命令不执行测试或外部写入，见[收尾规则](skills/personal-dev/references/completion.md)。
 - 工单队列默认关闭，支持一次性会话模式和显式开启的[持续检查模式](skills/personal-dev/references/issue-watch.md)：持续模式通过宿主定时唤醒处理后来新增的工单，停止会撤销旧唤醒；本机命令不独立运行模型。一次性模式中，用户明确开始后，由当前 Agent 串行处理符合条件的 `ai-ready` 工单；脚本负责状态与仓库占用。真实仓库连续执行及 Codex/Cursor 会话验收仍待完成，用法见[工单队列](skills/personal-dev/references/issue-queue.md)。
