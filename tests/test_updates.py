@@ -74,6 +74,24 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(json.loads(result.stdout)['enabled'])
 
+    def test_worktree_lifecycle_update_preserves_local_registry_and_installs_guard(self):
+        registry = self.root / '.local/agent/worktree-registry/synthetic.json'
+        registry.parent.mkdir(parents=True)
+        registry.write_text('{"version":1,"state":"retained","reason":"synthetic unique config"}')
+        before = registry.read_bytes()
+        config = (self.root / 'docs/agents/project.json').read_bytes()
+        for apply in (False, True, True):
+            initialize(self.root, self.package, apply)
+            self.assertEqual(registry.read_bytes(), before)
+            self.assertEqual((self.root / 'docs/agents/project.json').read_bytes(), config)
+        installed = self.root / '.agents/skills/personal-dev'
+        self.assertEqual((installed / 'references/worktree-lifecycle.md').read_bytes(),
+                         (self.package / 'skills/personal-dev/references/worktree-lifecycle.md').read_bytes())
+        result = subprocess.run([sys.executable, str(installed / 'scripts/pda.py'), '--help'],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('queue-cleanup-guard', result.stdout)
+
     def test_dirty_source_does_not_claim_clean_commit(self):
         path = self.package / 'skills/personal-dev/SKILL.md'
         path.write_text(path.read_text() + '\nLocal change\n')

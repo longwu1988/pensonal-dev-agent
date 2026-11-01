@@ -13,7 +13,7 @@ def main():
     parser.add_argument('action', choices=('init', 'doctor', 'recover', 'check-update',
                                          'update', 'skip-update', 'remind-later',
                                          'queue-start', 'queue-stop', 'queue-status', 'queue-next',
-                                         'queue-guard', 'queue-checkpoint', 'queue-block', 'queue-retry', 'queue-finish',
+                                         'queue-guard', 'queue-cleanup-guard', 'queue-checkpoint', 'queue-block', 'queue-retry', 'queue-finish',
                                          'delivery-status', 'delivery-record', 'delivery-check',
                                          'watch-start', 'watch-bind', 'watch-tick', 'watch-stop', 'watch-status'))
     parser.add_argument('--project', required=True, type=Path)
@@ -34,7 +34,7 @@ def main():
     parser.add_argument('--interval', type=int, help='watch check cadence in seconds (default 300)')
     args = parser.parse_args()
     queue_fields = {'thread': ('watch-start', 'watch-tick'), 'scheduler': ('watch-bind', 'watch-tick'),
-                    'generation': ('watch-bind', 'watch-tick'), 'interval': ('watch-start',), 'owner': ('queue-start','queue-next','queue-guard','queue-checkpoint','queue-block','queue-retry','queue-finish'),
+                    'generation': ('watch-bind', 'watch-tick'), 'interval': ('watch-start',), 'owner': ('queue-start','queue-next','queue-guard','queue-cleanup-guard','queue-checkpoint','queue-block','queue-retry','queue-finish'),
                     'stage': ('queue-checkpoint', 'delivery-record'), 'branch': ('queue-checkpoint',),
                     'worktree': ('queue-checkpoint',), 'commit': ('queue-checkpoint','queue-finish','delivery-record','delivery-check'),
                     'reason': ('queue-block',), 'issue': ('queue-retry','delivery-status','delivery-record','delivery-check'),

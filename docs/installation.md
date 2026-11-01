@@ -33,6 +33,7 @@ python3 scripts/pda.py doctor --project /path/to/project
 | `docs/agents/personal-dev.lock.json` | 可提交的受管内容摘要及来源 commit；新克隆也能幂等识别 |
 | `.local/agent/install/` | 本地锁与最近一次事务备份，加入 Git 忽略，不提交 |
 | `.local/agent/updates/` | 当前电脑/工程的检查时间、候选、稍后提醒及跳过状态，不提交 |
+| `.local/agent/worktree-registry/` | Agent 按任务维护的 worktree 清理台账与恢复定位；忽略于 Git，安装器不预建、不删除 |
 | `.local/agent/watch/` | 持续授权、宿主调度绑定及下一检查时间；本机私有，不随 Git 同步 |
 | `.local/agent/queue/` | 同仓库主工作目录的队列状态与本机锁；不提交，不随 Git 同步 |
 
@@ -98,3 +99,7 @@ doctor 只读取工程配置、本地候选入口摘要、MCP 配置文件是否
 ## 持续检查接入
 
 按[持续检查模式](../skills/personal-dev/references/issue-watch.md)执行开启、宿主调度绑定、首次验证及停止流程。`watch-start` 仅保存 pending 授权；`watch-bind` 不会创建调度；必须实际配置宿主 heartbeat 并读回激活状态。当前提供 Codex 桌面工具适配指引，Cursor 调度未验证；真实宿主持续运行仍需试点，不把合成测试当作已完成实机验收。
+
+## Worktree 清理接入
+
+本次新增[worktree 生命周期规则](../skills/personal-dev/references/worktree-lifecycle.md)和队列 `queue-cleanup-guard`，运行时文件布局、配置格式及协议 3 保持不变。已有协议 3 工程可正常预览并应用更新；协议 1/2 仍按前述完整源码方式迁移。新任务加载规则后由 Agent 登记并执行 Git/宿主工具清理，安装器不会删除任何现存 worktree，也不会自动建立历史清理授权或后台任务。台账不受安装事务管理，更新/恢复保留已有记录。
