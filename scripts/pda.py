@@ -10,7 +10,7 @@ from pda.transaction import recover, InstallError
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('init', 'doctor', 'recover', 'check-update',
+    parser.add_argument('action', choices=('init', 'doctor', 'recover', 'check-update', 'notify-question',
                                          'update', 'skip-update', 'remind-later',
                                          'queue-start', 'queue-stop', 'queue-status', 'queue-next',
                                          'queue-guard', 'queue-cleanup-guard', 'queue-checkpoint', 'queue-block', 'queue-retry', 'queue-finish',
@@ -62,6 +62,10 @@ def main():
         parser.error('--revision is required only for update, skip-update and remind-later')
     package = Path(__file__).resolve().parents[1]
     try:
+        if args.action == 'notify-question':
+            from pda.notifications import notify
+            print(json.dumps(notify(package), ensure_ascii=False, indent=2))
+            return 0
         if args.action.startswith('watch-'):
             from pda.issue_watch import dispatch
             print(json.dumps(dispatch(root, args), ensure_ascii=False, indent=2))

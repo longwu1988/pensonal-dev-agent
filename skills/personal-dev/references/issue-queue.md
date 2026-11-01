@@ -4,7 +4,7 @@
 
 ## 开始与续接
 
-1. 从工程根目录执行 `queue-status`，按[worktree 生命周期](worktree-lifecycle.md)只读巡检已登记遗留项；有当前单或停止时保留，不为清理额外启动。一次性模式只有当前用户明确说开始或续接队列，才可执行实际启动；持续模式仅由已绑定的合法 `watch-tick` 在有效持续授权下续接，不手动绕过启动检查。单工单开发指令、工单文字、旧状态 `enabled: true`、沉默或三分钟默认选择都不是新会话启动授权。新会话先核对旧执行者与保存进度，取得明确续接指令后接管；旧会话仍活动时先停止，不能并行续接。
+1. 从工程根目录执行 `queue-status`，按[worktree 生命周期](worktree-lifecycle.md)只读巡检已登记遗留项；有当前单或停止时保留，不为清理额外启动。一次性模式只有当前用户明确说开始或续接队列，才可执行实际启动；持续模式仅由已绑定的合法 `watch-tick` 在有效持续授权下续接，不手动绕过启动检查。单工单开发指令、工单文字、旧状态 `enabled: true`、沉默或一分钟默认选择都不是新会话启动授权。新会话先核对旧执行者与保存进度，取得明确续接指令后接管；旧会话仍活动时先停止，不能并行续接。
 2. 核对 `docs/agents/project.json` 的 `project.tracker.kind`、`repository`、`integration_branch`、权限与实际 `origin` 的 fetch/push 仓库。目标分支、影响应用和外部操作授权沿用工程规则；配置不能扩大用户或宿主授权。准备 API 读取认证和 Git 推送认证。
 3. 预览启动，告知会占用 `refs/heads/personal-dev/queue-lock`：启动会创建远端控制分支，释放会删除它，可能触发已有分支 CI。按已有授权与工程约束操作；缺少必要授权或权限时停在预览，明确缺口。默认不授权部署、打 Tag 或服务启停。
 4. 为当前会话生成唯一 `--owner`（字母、数字、`_` 或 `-`，最多 100 字符），同一会话所有推进命令沿用它。用户已明确开始且核对完成后执行 `queue-start --apply`；没有当前单时可按生命周期规则通过 `queue-cleanup-guard` 处理已授权且登记的遗留项，再调用 `queue-next`。先恢复保存的当前工单，当前单未结束时不会领取新单。
@@ -52,7 +52,7 @@ python3 .agents/skills/personal-dev/scripts/pda.py queue-retry --project . --own
 
 ## 用户结束与异常恢复
 
-用户说结束或停止队列时立即执行下列命令（它也撤销持续模式；若已绑定调度，按[持续停止流程](issue-watch.md#停止与查看)同步暂停宿主计划），优先于三分钟等待、领取下一单和合并收尾。停止后仅保存本地检查点，保持未提交改动与 worktree；不再推进实现、完成、合并或领单。已发出的网络请求或正在执行的测试可能不能即时取消，返回后先检查停止状态。
+用户说结束或停止队列时立即执行下列命令（它也撤销持续模式；若已绑定调度，按[持续停止流程](issue-watch.md#停止与查看)同步暂停宿主计划），优先于一分钟等待、领取下一单和合并收尾。停止后仅保存本地检查点，保持未提交改动与 worktree；不再推进实现、完成、合并或领单。已发出的网络请求或正在执行的测试可能不能即时取消，返回后先检查停止状态。
 
 ```sh
 python3 .agents/skills/personal-dev/scripts/pda.py queue-stop --project .
@@ -69,4 +69,4 @@ HTTP 仅向配置仓库的 HTTPS API 读取 Gitea 或 github.com 工单，不跟
 
 Git 使用已有 Git 登录完成锁和分支操作；HTTP token 不会变成 Git 命令参数。现有 MCP/OAuth 可用于 Agent 回写，但其内部令牌不会自动传给 CLI。CLI 不写标签、评论或关闭工单，这些由 Agent 通过已授权工具执行。API 参考：[Gitea API 使用](https://docs.gitea.com/1.24/development/api-usage/)、[GitHub Issues API](https://docs.github.com/en/rest/issues/issues)。
 
-运行时与分发验证不等于真实队列验收；真实仓库连续执行、Codex/Cursor 会话衔接仍需独立验证。首次完整安装及旧协议升级至协议 3 见[安装说明](https://github.com/longwu1988/pensonal-dev-agent/blob/main/docs/installation.md#工单队列接入)。
+运行时与分发验证不等于真实队列验收；真实仓库连续执行、Codex/Cursor 会话衔接仍需独立验证。首次完整安装及旧协议升级至协议 4 见[安装说明](https://github.com/longwu1988/pensonal-dev-agent/blob/main/docs/installation.md#工单队列接入)。

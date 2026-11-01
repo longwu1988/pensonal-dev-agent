@@ -238,7 +238,8 @@ class UpdateTests(unittest.TestCase):
         trans.write_text(trans.read_text().replace(", 'issue_watch'", ''))
         (old_package / 'scripts/pda/issue_watch.py').unlink()
         source = old_package / 'scripts/pda/source.py'
-        source.write_text(source.read_text().replace('PROTOCOL = 3', 'PROTOCOL = 2'))
+        from pda.source import PROTOCOL
+        source.write_text(source.read_text().replace('PROTOCOL = ' + str(PROTOCOL), 'PROTOCOL = 2'))
         (old_package / 'profiles/update.json').write_text('{"protocol":2}')
         project = self.base / 'old-project'; project.mkdir()
         result = subprocess.run([sys.executable, str(old_package / 'scripts/pda.py'), 'init',
@@ -286,6 +287,61 @@ class UpdateTests(unittest.TestCase):
                 update(self.root, self.new, apply=True)
         self.assertEqual(path.read_text(), 'concurrent user change')
         self.assertEqual(self.installed()['source']['commit'], self.old)
+
+    def test_full_protocol_three_audio_upgrade_preserves_config_and_progress(self):
+        old_package = self.base / 'old-audio-package'
+        shutil.copytree(self.package, old_package, ignore=shutil.ignore_patterns('.git', '__pycache__'))
+        trans = old_package / 'scripts/pda/transaction.py'
+        trans.write_text(trans.read_text().replace(", 'notifications'", '').replace(
+            "ASSETS = ('assets/question-pending.wav',)", 'ASSETS = ()'))
+        (old_package / 'scripts/pda/notifications.py').unlink()
+        (old_package / 'skills/personal-dev/assets/question-pending.wav').unlink()
+        source = old_package / 'scripts/pda/source.py'
+        source.write_text(source.read_text().replace('PROTOCOL = 4', 'PROTOCOL = 3'))
+        (old_package / 'profiles/update.json').write_text('{"protocol":3}')
+        project = self.base / 'old-audio-project'; project.mkdir()
+        result = subprocess.run([sys.executable, str(old_package / 'scripts/pda.py'), 'init',
+                                 '--project', str(project), '--apply'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = project / 'docs/agents/project.json'; before = config.read_bytes()
+        agents = project / 'AGENTS.md'
+        agents.write_text('Explicitly disable default choices and mute notifications.\n' + agents.read_text())
+        before_agents = agents.read_bytes()
+        progress = project / '.local/agent/watch/state.json'; progress.parent.mkdir(parents=True)
+        progress.write_text('{"synthetic":"keep"}')
+        for apply in (False, True, True):
+            initialize(project, REPO, apply)
+            self.assertEqual(config.read_bytes(), before)
+            self.assertEqual(agents.read_bytes(), before_agents)
+            self.assertEqual(progress.read_text(), '{"synthetic":"keep"}')
+        asset = '.agents/skills/personal-dev/assets/question-pending.wav'
+        self.assertEqual((project / asset).read_bytes(),
+                         (REPO / 'skills/personal-dev/assets/question-pending.wav').read_bytes())
+
+    def test_audio_migration_interruption_recovers_with_full_source(self):
+        from pda.transaction import apply_changes, atomic_write
+        prefix = '.agents/skills/personal-dev/'
+        trans, asset = prefix + 'scripts/pda/transaction.py', prefix + 'assets/question-pending.wav'
+        new = (self.root / trans).read_bytes()
+        old = new.replace(b", 'notifications'", b'').replace(
+            b"ASSETS = ('assets/question-pending.wav',)", b'ASSETS = ()')
+        (self.root / trans).write_bytes(old)
+        data = (self.root / asset).read_bytes(); (self.root / asset).unlink()
+        before = self.snapshot()
+        changes = [dict(path=asset, before=None, after=data), dict(path=trans, before=old, after=new)]
+        def fail(root, name, content, file_mode=0o644):
+            if name == trans: raise OSError('interrupted audio migration')
+            atomic_write(root, name, content, file_mode)
+        with patch('pda.transaction.atomic_write', side_effect=fail):
+            with self.assertRaises(InstallError): apply_changes(self.root, changes)
+        old_result = subprocess.run([sys.executable, str(self.root / trans), '--project', str(self.root), '--apply'],
+                                    capture_output=True, text=True)
+        self.assertNotEqual(old_result.returncode, 0)
+        self.assertIn('unexpected recovery target', old_result.stderr)
+        result = subprocess.run([sys.executable, str(REPO / 'scripts/pda.py'), 'recover', '--project', str(self.root), '--apply'],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.snapshot(), before)
 
     def test_copied_project_keeps_version_without_local_cache_or_source_checkout(self):
         clone = self.base / 'clone'
