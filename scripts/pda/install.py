@@ -5,7 +5,7 @@ import json
 import shutil
 
 from .config import CONFIG, project_config
-from .source import RUNTIME, local_source
+from .source import RUNTIME, ASSETS, local_source
 from .transaction import (
     InstallError, JOURNAL, LOCK, apply_changes, ensure_ready, json_bytes,
     locked, read, safe_path,
@@ -31,6 +31,8 @@ def resources(package):
     for name in RUNTIME:
         files[".agents/skills/personal-dev/" + name] = (package / name).read_bytes()
     source = package / "skills/personal-dev"
+    for name in ASSETS:
+        files[".agents/skills/personal-dev/" + name] = (source / name).read_bytes()
     for path in sorted(source.rglob("*.md")):
         files[".agents/skills/personal-dev/" + path.relative_to(source).as_posix()] = path.read_bytes()
     if ".agents/skills/personal-dev/SKILL.md" not in files:
@@ -124,8 +126,14 @@ def show(changes):
     for change in changes:
         name = change["path"]
         print(("CREATE " if change["before"] is None else "UPDATE ") + name)
-        before = (change["before"] or b"").decode("utf-8").splitlines(keepends=True)
-        after = change["after"].decode("utf-8").splitlines(keepends=True)
+        try:
+            if b'\0' in (change['before'] or b'') or b'\0' in change['after']:
+                raise UnicodeError('binary payload')
+            before = (change["before"] or b"").decode("utf-8").splitlines(keepends=True)
+            after = change["after"].decode("utf-8").splitlines(keepends=True)
+        except UnicodeError:
+            print('Binary resource: ' + str(len(change['after'])) + ' bytes; SHA256 ' + digest(change['after']))
+            continue
         print("".join(difflib.unified_diff(before, after, fromfile=name, tofile=name)), end="")
 
 

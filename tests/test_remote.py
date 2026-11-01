@@ -114,6 +114,34 @@ class DownloadTests(unittest.TestCase):
                 with remote.download('a' * 40):
                     self.fail('oversized archive accepted')
 
+    def test_protocol_three_refuses_partial_audio_upgrade(self):
+        files, tree = self.payload()
+        old_runtime = tuple(n for n in remote.RUNTIME if n != 'scripts/pda/notifications.py')
+        old_static = tuple(n for n in remote.STATIC if not n.endswith('.wav'))
+        with patch.object(remote, 'RUNTIME', old_runtime), patch.object(remote, 'STATIC', old_static), \
+             patch.object(remote.Client, 'get', return_value=tree):
+            with self.assertRaisesRegex(InstallError, 'runtime'):
+                with remote.download('a' * 40): self.fail('partial audio runtime accepted')
+        with patch.object(remote, 'PROTOCOL', 3), \
+             patch.object(remote.Client, 'get', side_effect=[tree, self.archive(files)]):
+            with self.assertRaisesRegex(InstallError, 'protocol'):
+                with remote.download('a' * 40): self.fail('old protocol accepted audio update')
+
+    def test_audio_asset_download_integrity_and_presence(self):
+        name = 'skills/personal-dev/assets/question-pending.wav'
+        files, tree = self.payload()
+        with patch.object(remote.Client, 'get', side_effect=[tree, self.archive(files)]):
+            with remote.download('a' * 40) as root:
+                self.assertEqual((root / name).read_bytes(), files[name])
+        bad = dict(files, **{name: b'bad audio'})
+        with patch.object(remote.Client, 'get', side_effect=[tree, self.archive(bad)]):
+            with self.assertRaises(InstallError):
+                with remote.download('a' * 40): self.fail('tampered audio accepted')
+        absent = dict(tree, tree=[item for item in tree['tree'] if item['path'] != name])
+        with patch.object(remote.Client, 'get', return_value=absent):
+            with self.assertRaises(InstallError):
+                with remote.download('a' * 40): self.fail('missing audio accepted')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -3,13 +3,14 @@ import re
 import hashlib
 import subprocess
 
-from .transaction import InstallError, RUNTIME
+from .transaction import InstallError, RUNTIME, ASSETS
 
 REPOSITORY = 'longwu1988/pensonal-dev-agent'
 CHANNEL = 'main'
-PROTOCOL = 3
+PROTOCOL = 4
 STATIC = ('templates/project-guide.md', 'templates/project.json',
-          'profiles/core.json', 'profiles/update.json', 'adapters/cursor/personal-dev.mdc')
+          'profiles/core.json', 'profiles/update.json', 'adapters/cursor/personal-dev.mdc') + tuple(
+              'skills/personal-dev/' + name for name in ASSETS)
 
 
 def revision(value):
