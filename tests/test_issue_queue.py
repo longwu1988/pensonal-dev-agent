@@ -280,6 +280,23 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(result['release'], 'pending')
         self.assertEqual(self.q.stop()['release'], 'released')
 
+    def test_cleanup_guard_only_allows_owned_active_queue_between_issues(self):
+        self.q.start(); self.q.next()
+        with self.assertRaises(InstallError): self.q.cleanup_guard()
+        delivery_ready(self.root, self.tracker)
+        self.tracker.items[1]['state'] = 'closed'; self.lease.merged = True
+        self.q.finish('a'*40, 'synthetic acceptance')
+        self.assertTrue(self.q.cleanup_guard()['enabled'])
+        other = Queue(self.root, self.tracker, self.lease, 'main', owner='other')
+        with self.assertRaises(InstallError): other.cleanup_guard()
+        owned = self.lease.head; self.lease.head = 'f'*40
+        with self.assertRaises(InstallError): self.q.cleanup_guard()
+        self.lease.head = owned
+        self.q.next()
+        with self.assertRaises(InstallError): self.q.cleanup_guard()
+        self.q.stop()
+        with self.assertRaises(InstallError): self.q.cleanup_guard()
+
     def test_finish_needs_closed_issue_and_remote_commit_evidence(self):
         self.q.start(); self.q.next()
         delivery_ready(self.root, self.tracker)

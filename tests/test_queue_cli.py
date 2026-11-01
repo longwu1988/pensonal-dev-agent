@@ -56,6 +56,13 @@ class QueueCLITests(unittest.TestCase):
         self.assertEqual(r.returncode,0,r.stderr)
         self.assertFalse(json.loads(r.stdout)['enabled'])
 
+    def test_cleanup_guard_requires_owner_and_never_starts_stopped_queue(self):
+        self.assertNotEqual(self.run_cli('queue-cleanup-guard').returncode, 0)
+        result = self.run_cli('queue-cleanup-guard', '--owner', 'synthetic')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('queue is stopped', result.stderr)
+        self.assertFalse((self.root / '.local').exists())
+
     def test_complete_requires_evidence_and_merge_commit_flags(self):
         r=self.run_cli('queue-finish','--owner','conversation-1')
         self.assertNotEqual(r.returncode,0)

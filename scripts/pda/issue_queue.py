@@ -301,6 +301,15 @@ class Queue:
             if not state['current']: raise InstallError('no current queue issue')
             return state
 
+    def cleanup_guard(self):
+        """Authorize a queue boundary, not deletion of any particular worktree."""
+        with self._locked():
+            state = self.status()
+            self._active(state)
+            if state['current'] is not None:
+                raise InstallError('current issue still exists; defer worktree cleanup until after queue-finish')
+            return state
+
     def checkpoint(self, stage, branch=None, worktree=None, commit=None):
         if stage not in STAGES: raise InstallError('unknown queue stage')
         if commit is not None and not re.fullmatch('[0-9a-f]{40}', commit): raise InstallError('full commit SHA required')
@@ -577,6 +586,7 @@ def dispatch(root, args):
     if action == 'start': return queue.start()
     if action == 'next': return queue.next()
     if action == 'guard': return queue.guard()
+    if action == 'cleanup-guard': return queue.cleanup_guard()
     if action == 'block': return queue.block(args.reason)
     if action == 'retry': return queue.retry(args.issue)
     if action == 'finish':
