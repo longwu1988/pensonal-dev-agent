@@ -12,13 +12,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=('init', 'doctor', 'recover', 'check-update', 'notify-question',
                                          'update', 'skip-update', 'remind-later',
+                                         'permissions-status', 'permissions-grant', 'permissions-revoke', 'permissions-check',
                                          'queue-start', 'queue-stop', 'queue-status', 'queue-next', 'queue-claim',
                                          'queue-resource-acquire', 'queue-resource-release', 'queue-legacy-stop', 'queue-transfer',
                                          'queue-guard', 'queue-cleanup-guard', 'queue-checkpoint', 'queue-block', 'queue-retry', 'queue-finish',
                                          'delivery-status', 'delivery-record', 'delivery-check',
                                          'watch-start', 'watch-bind', 'watch-tick', 'watch-stop', 'watch-status'))
     parser.add_argument('--project', required=True, type=Path)
-    parser.add_argument('--apply', action='store_true', help='apply previewed init/recover/update or queue-start/watch-start/queue-transfer changes')
+    parser.add_argument('--apply', action='store_true', help='apply previewed init/recover/update or queue-start/watch-start/queue-transfer/permissions-grant/permissions-revoke changes')
     parser.add_argument('--force', action='store_true', help='check again without daily cache')
     parser.add_argument('--revision', help='full commit SHA offered by check-update')
     parser.add_argument('--owner', help='unique current conversation ID for queue ownership')
@@ -27,7 +28,7 @@ def main():
     parser.add_argument('--worktree', help='task worktree checkpoint')
     parser.add_argument('--commit', help='full task or integration commit SHA')
     parser.add_argument('--reason', help='queue blocking reason code')
-    parser.add_argument('--issue', type=int, help='issue number for queue retry or delivery')
+    parser.add_argument('--issue', type=int, help='issue number for scoped authorization, queue work or delivery')
     parser.add_argument('--evidence', help='test/review evidence locator; never credential text')
     parser.add_argument('--thread', help='bound host conversation ID for continuous watch')
     parser.add_argument('--scheduler', help='verified host schedule ID')
@@ -36,22 +37,26 @@ def main():
     parser.add_argument('--target-owner', help='explicit transfer destination conversation ID')
     parser.add_argument('--resource', help='environment:NAME resource; blocked integration:BRANCH supports release only')
     parser.add_argument('--all', action='store_true', help='stop all local workers and watch')
+    parser.add_argument('--allow', help='comma-separated capabilities explicitly granted for one issue')
+    parser.add_argument('--deny', help='comma-separated capabilities denied for one issue')
+    parser.add_argument('--capability', help='comma-separated capabilities to check')
     args = parser.parse_args()
     queue_fields = {'thread': ('watch-start', 'watch-tick'), 'scheduler': ('watch-bind', 'watch-tick'),
-                    'generation': ('watch-bind', 'watch-tick'), 'interval': ('watch-start',), 'owner': ('queue-start','queue-next','queue-guard','queue-cleanup-guard','queue-checkpoint','queue-block','queue-retry','queue-finish','queue-status','queue-stop','queue-claim','queue-resource-acquire','queue-resource-release','queue-transfer'),
+                    'generation': ('watch-bind', 'watch-tick'), 'interval': ('watch-start',), 'owner': ('permissions-status','permissions-grant','permissions-revoke','permissions-check','queue-start','queue-next','queue-guard','queue-cleanup-guard','queue-checkpoint','queue-block','queue-retry','queue-finish','queue-status','queue-stop','queue-claim','queue-resource-acquire','queue-resource-release','queue-transfer'),
                     'stage': ('queue-checkpoint', 'delivery-record'), 'branch': ('queue-checkpoint',),
                     'worktree': ('queue-checkpoint',), 'commit': ('queue-checkpoint','queue-finish','delivery-record','delivery-check'),
-                    'reason': ('queue-block',), 'issue': ('queue-claim','queue-retry','delivery-status','delivery-record','delivery-check'),
-                    'evidence': ('queue-finish','delivery-record','queue-transfer'), 'target_owner': ('queue-transfer',),
-                    'resource': ('queue-resource-acquire','queue-resource-release')}
+                    'reason': ('queue-block',), 'issue': ('permissions-grant','permissions-revoke','permissions-check','queue-start','queue-claim','queue-retry','delivery-status','delivery-record','delivery-check'),
+                    'evidence': ('permissions-grant','permissions-revoke','queue-finish','delivery-record','queue-transfer'), 'target_owner': ('queue-transfer',),
+                    'resource': ('queue-resource-acquire','queue-resource-release'),
+                    'allow': ('permissions-grant',), 'deny': ('permissions-grant',), 'capability': ('permissions-check',)}
     for field, actions in queue_fields.items():
         if getattr(args, field) is not None and args.action not in actions:
             parser.error('--' + field + ' is not valid for this action')
     if args.action in queue_fields['owner'] and args.action not in ('queue-status','queue-stop') and not args.owner:
-        parser.error('--owner is required for queue work')
+        parser.error('--owner is required for this workflow action')
     if args.all and (args.action != 'queue-stop' or args.owner):
         parser.error('--all requires queue-stop without --owner')
-    required = {'queue-transfer': ('target_owner','evidence'), 'queue-claim': ('issue',), 'queue-resource-acquire': ('resource',), 'queue-resource-release': ('resource',),'watch-start': ('thread',), 'watch-bind': ('generation','scheduler'),
+    required = {'permissions-grant': ('issue','evidence'), 'permissions-revoke': ('issue','evidence'), 'permissions-check': ('issue','capability'), 'queue-transfer': ('target_owner','evidence'), 'queue-claim': ('issue',), 'queue-resource-acquire': ('resource',), 'queue-resource-release': ('resource',),'watch-start': ('thread',), 'watch-bind': ('generation','scheduler'),
                 'watch-tick': ('generation','scheduler','thread'), 'queue-checkpoint': ('stage',), 'queue-block': ('reason',),
                 'queue-retry': ('issue',), 'queue-finish': ('commit','evidence'),
                 'delivery-record': ('issue','commit','stage','evidence'), 'delivery-check': ('issue','commit')}
@@ -60,8 +65,8 @@ def main():
     root = args.project.expanduser().resolve()
     if not root.is_dir():
         parser.error('project must be an existing directory')
-    if args.apply and args.action not in ('init', 'recover', 'update', 'queue-start', 'watch-start', 'queue-transfer'):
-        parser.error('--apply is only for init, recover, update or queue-start/watch-start/queue-transfer')
+    if args.apply and args.action not in ('init', 'recover', 'update', 'queue-start', 'watch-start', 'queue-transfer', 'permissions-grant', 'permissions-revoke'):
+        parser.error('--apply is only for init, recover, update or queue-start/watch-start/queue-transfer/permissions-grant/permissions-revoke')
     if args.force and args.action != 'check-update':
         parser.error('--force only bypasses check-update cache; it never overwrites files')
     needs_revision = args.action in ('update', 'skip-update', 'remind-later')
@@ -77,7 +82,7 @@ def main():
             from pda.issue_watch import dispatch
             print(json.dumps(dispatch(root, args), ensure_ascii=False, indent=2))
             return 0
-        if args.action.startswith(('queue-', 'delivery-')):
+        if args.action.startswith(('queue-', 'delivery-', 'permissions-')):
             from pda.worker_dispatch import dispatch
             print(json.dumps(dispatch(root, args), ensure_ascii=False, indent=2))
             return 0

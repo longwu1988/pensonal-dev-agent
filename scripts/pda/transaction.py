@@ -9,7 +9,7 @@ import stat
 import tempfile
 
 RUNTIME = ('scripts/pda.py',) + tuple('scripts/pda/' + name + '.py' for name in (
-    '__init__', 'config', 'install', 'transaction', 'source', 'remote', 'updates', 'issue_queue', 'issue_tracker', 'issue_watch', 'notifications', 'issue_claims', 'issue_workers', 'worker_dispatch'))
+    '__init__', 'config', 'install', 'transaction', 'source', 'remote', 'updates', 'issue_queue', 'issue_tracker', 'issue_watch', 'notifications', 'issue_claims', 'issue_workers', 'worker_dispatch', 'permissions'))
 ASSETS = ('assets/question-pending.wav',)
 
 JOURNAL = ".local/agent/install/transaction.json"

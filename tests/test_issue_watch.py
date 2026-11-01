@@ -198,7 +198,7 @@ class WatchDispatchBoundaryTests(unittest.TestCase):
         self.root = self.fixture.root
         config_path = self.root / 'docs/agents/project.json'
         config = json.loads(config_path.read_text())
-        config['permissions'].update(push_task_branch=True, write_issue=True)
+        config['permissions'].update(manage_claims=True, update_issue_labels=True)
         config_path.write_text(json.dumps(config))
 
     def args(self, action, **changes):

@@ -99,10 +99,11 @@ def _credential_text(value):
 class Tracker:
     """Access one configured repository; credentials never follow remote-provided links."""
 
-    def __init__(self, kind, repository, root: Path, credentials_path=None):
+    def __init__(self, kind, repository, root: Path, credentials_path=None, before_write=None):
         if kind not in ('gitea', 'github'):
             raise InstallError('unsupported issue tracker')
         self.kind = kind
+        self.before_write = before_write
         self.repository = canonical_repository(repository)
         origin, path = _url(self.repository)
         parts = path[1:].split('/')
@@ -193,7 +194,11 @@ class Tracker:
                           data=json.dumps(data).encode() if data is not None else None)
         try:
             opener = build_opener(NoRedirect(), HTTPSHandler(context=ssl.create_default_context()))
-            with opener.open(request, timeout=self._remaining(budget)) as response:
+            timeout = self._remaining(budget)
+            # Recheck local authorization after all prior remote reads, at the write boundary.
+            if request.get_method().upper() not in ('GET', 'HEAD') and self.before_write is not None:
+                self.before_write()
+            with opener.open(request, timeout=timeout) as response:
                 if response.status not in success:
                     raise InstallError('issue tracker returned an unsuccessful status')
                 length = response.headers.get('Content-Length')

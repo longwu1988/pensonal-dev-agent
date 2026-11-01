@@ -40,7 +40,7 @@ python3 scripts/pda.py doctor --project /path/to/project
 
 现有应用、MCP、OpenSpec 配置、上游 skills 与业务文件不在本安装器的写入清单内。应用映射从直接子目录的 AGENTS 发现，需人工核对补充；集成分支、仓库、验证命令及环境不猜测。
 
-安装后维护 project.json：重要选择引用决策文档，未知状态保留未知。`environment.secrets` 只记录 Agent 操作凭据来源，默认使用当前工程的 `.local/secrets/access.json`；应用运行凭据继续由各自配置管理。具体边界与使用按[凭据用途与来源](../skills/personal-dev/references/credentials.md)处理，安装器不自动创建敏感文件。权限默认为 false，按实际授权填写；配置不覆盖当前会话或宿主限制。小程序真机、数据库环境等无法自动验证的条件继续保留缺口。
+安装后维护 project.json：重要选择引用决策文档，未知状态保留未知。`environment.secrets` 只记录 Agent 操作凭据来源，默认使用当前工程的 `.local/secrets/access.json`；应用运行凭据继续由各自配置管理。具体边界与使用按[凭据用途与来源](../skills/personal-dev/references/credentials.md)处理，安装器不自动创建敏感文件。权限默认为 false，按[独立能力与本单授权](../skills/personal-dev/references/permissions.md)填写；占用使用 `manage_claims`，标签使用 `update_issue_labels`，均不要求业务分支推送授权。旧配置缺失的新权限按 false 处理，不从旧推送/工单写入权限推断授权，也不改写已有配置。单工单授权保存在 Git 忽略的 `.local/agent/permissions/`，配置不覆盖当前会话或宿主限制。小程序真机、数据库环境等无法自动验证的条件继续保留缺口。
 
 ## 工具入口
 
@@ -60,7 +60,7 @@ python3 scripts/pda.py doctor --project /path/to/project
 
 版本固定到 `longwu1988/pensonal-dev-agent` 的 main 完整 commit。开发分支领先 main 时报告 ahead；分叉报告 diverged，不自动降级。检查失败继续本地工作，可显式 `--force` 重查。GitHub 公开 API 无账号依赖但有请求限额，网络和限额问题均不阻塞业务任务；本工具不改 Git 全局配置或自动配置代理。
 
-update 默认下载到系统临时目录并预览，只有 `--apply` 写入。当前本地运行时负责安装，不执行下载的 Python；校验固定提交的 Git blob 摘要、常规文件路径、体积和协议，临时下载退出即清理。本版新增 `issue_claims.py`、`issue_workers.py`、`worker_dispatch.py`，保留固定语音资源，当前更新协议为 5。协议 1/2/3/4 updater 会拒绝不完整更新，需要从审阅过、固定提交的完整源码再执行一次 `init` 预览和 `init --apply`；保留已有 project.json、区外规则、权限、queue/workers/delivery/watch 状态，不删除 lock 绕过冲突。已有持续任务升级前先停止本地模式和宿主调度并保存检查点，升级后用户明确继续才重新绑定。迁移或恢复中断时使用完整协议 5 源码执行 `python3 scripts/pda.py recover --project /path/to/project --apply`，旧事务模块不识别新增文件，不能依赖半更新的入口。后续协议 5 兼容更新可用工程内 updater。
+update 默认下载到系统临时目录并预览，只有 `--apply` 写入。当前本地运行时负责安装，不执行下载的 Python；校验固定提交的 Git blob 摘要、常规文件路径、体积和协议，临时下载退出即清理。本版新增 `permissions.py`，保留工单占用运行时及固定语音资源，当前更新协议为 6。协议 1/2/3/4/5 updater 会拒绝不完整更新，需要从审阅过、固定提交的完整源码再执行一次 `init` 预览和 `init --apply`；保留已有 project.json、区外规则、权限、queue/workers/delivery/watch 状态及本地 permissions 授权记录，不删除 lock 绕过冲突。已有持续任务升级前先停止本地模式和宿主调度并保存检查点，升级后用户明确继续才重新绑定。迁移或恢复中断时使用完整协议 6 源码执行 `python3 scripts/pda.py recover --project /path/to/project --apply`，旧事务模块不识别新增文件，不能依赖半更新的入口。后续协议 6 兼容更新可用工程内 updater。
 
 安装事务包含运行时和来源记录，因此 recover 会同时恢复版本；它不会恢复提醒偏好、队列或工单收尾状态。更新期间 main 前进不改变用户选定候选，工程配置继续由工程维护。应用后新任务加载新规则，宿主自动发现、热重载及跨工具会话仍需单独验收。安装 runtime 提供更新检查、更新选择、恢复、队列控制、工单收尾检查及本地固定语音播放；init 和 doctor 仍从完整源码目录调用。
 
@@ -79,7 +79,7 @@ python3 scripts/pda.py recover --project /path/to/project --apply
 
 升级前用旧版完成或核对活动旧队列；新版拒绝自动接管旧版的 current/lease/enabled 状态。停止并不等于所有权已完成迁移，不能删除旧状态或远端锁。协议 5 使用持久兼容哨兵阻止旧客户端并发进入；所有处理会话均应升级。规则见[工单占用](../skills/personal-dev/references/issue-claims.md)。
 
-完整安装当前协议 5 后，按[工单队列](../skills/personal-dev/references/issue-queue.md)核对仓库、集成分支、权限与认证，再由用户明确开始。安装本身保持队列关闭；不自动创建后台任务；持续模式需另行明确开启并绑定宿主调度。命令、领取条件、远端控制分支副作用及恢复方式均以该文档为准。
+完整安装当前协议 6 后，按[工单队列](../skills/personal-dev/references/issue-queue.md)核对仓库、集成分支、权限与认证，再由用户明确开始。安装本身保持队列关闭；不自动创建后台任务；持续模式需另行明确开启并绑定宿主调度。命令、领取条件、远端控制分支副作用及恢复方式均以该文档为准。
 
 HTTP 读取支持 Gitea 与 github.com，使用 `PDA_GITEA_TOKEN` / `PDA_GITHUB_TOKEN` 或工程明确配置的 Agent 操作凭据来源；Git 推送使用现有 Git 登录。MCP 内部 OAuth 不会自动传给 CLI，状态标签由运行时在取得远端占用后同步；工单评论和关单仍由 Agent 使用已授权工具完成。此能力尚待真实仓库及两端会话验收。
 
@@ -95,7 +95,7 @@ doctor 只读取工程配置、本地候选入口摘要、MCP 配置文件是否
 
 ## 工单收尾检查更新
 
-普通工单和队列共用[收尾记录与完成检查](../skills/personal-dev/references/completion.md)。收尾命令自协议 2 起提供，没有新增工程配置字段；当前包含持续模式和音频提醒的版本为协议 5，旧工程按上面的完整源码迁移流程接入。更新后在新任务/新会话读取新规则。已有进行中的队列缺少收尾记录时，从真实验收、Git 和工单证据补齐后继续，不删除队列状态重新领取。
+普通工单和队列共用[收尾记录与完成检查](../skills/personal-dev/references/completion.md)。收尾命令自协议 2 起提供，没有新增工程配置字段；当前包含持续模式、音频提醒及独立权限的版本为协议 6，旧工程按上面的完整源码迁移流程接入。更新后在新任务/新会话读取新规则。已有进行中的队列缺少收尾记录时，从真实验收、Git 和工单证据补齐后继续，不删除队列状态重新领取。
 
 收尾记录存于主工作目录 `.local/agent/delivery/`，各 worktree 共用。更新与重复安装保留记录；它是本机进度，不随 Git 分发到其他电脑。换电脑或仅安装 Skill 时按规则从可信工单与远端恢复，不将缺失记录猜成已完成。
 
@@ -105,4 +105,4 @@ doctor 只读取工程配置、本地候选入口摘要、MCP 配置文件是否
 
 ## Worktree 清理接入
 
-[worktree 生命周期规则](../skills/personal-dev/references/worktree-lifecycle.md)及队列 `queue-cleanup-guard` 自协议 3 起提供；当前含音频资源和按工单占用的协议 5 仍保留这套流程，旧工程按前述完整源码方式迁移。新任务加载规则后由 Agent 登记并执行 Git/宿主工具清理，安装器不会删除任何现存 worktree，也不会自动建立历史清理授权或后台任务。台账不受安装事务管理，更新/恢复保留已有记录。
+[worktree 生命周期规则](../skills/personal-dev/references/worktree-lifecycle.md)及队列 `queue-cleanup-guard` 自协议 3 起提供；当前含音频资源、按工单占用和独立权限的协议 6 仍保留这套流程，旧工程按前述完整源码方式迁移。新任务加载规则后由 Agent 登记并执行 Git/宿主工具清理，安装器不会删除任何现存 worktree，也不会自动建立历史清理授权或后台任务。台账不受安装事务管理，更新/恢复保留已有记录。
