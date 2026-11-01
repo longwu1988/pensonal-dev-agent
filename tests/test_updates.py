@@ -213,6 +213,50 @@ class UpdateTests(unittest.TestCase):
         recover(self.root, True)
         self.assertEqual(self.snapshot(), before)
 
+    def test_full_protocol_two_to_three_upgrade_preserves_project_and_progress(self):
+        old_package = self.base / 'old-package'
+        shutil.copytree(self.package, old_package, ignore=shutil.ignore_patterns('.git', '__pycache__'))
+        trans = old_package / 'scripts/pda/transaction.py'
+        trans.write_text(trans.read_text().replace(", 'issue_watch'", ''))
+        (old_package / 'scripts/pda/issue_watch.py').unlink()
+        source = old_package / 'scripts/pda/source.py'
+        source.write_text(source.read_text().replace('PROTOCOL = 3', 'PROTOCOL = 2'))
+        (old_package / 'profiles/update.json').write_text('{"protocol":2}')
+        project = self.base / 'old-project'; project.mkdir()
+        result = subprocess.run([sys.executable, str(old_package / 'scripts/pda.py'), 'init',
+                                 '--project', str(project), '--apply'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = project / 'docs/agents/project.json'
+        before_config = config.read_bytes()
+        progress = project / '.local/agent/queue/state.json'; progress.parent.mkdir(parents=True)
+        progress.write_text('{"synthetic":"preserve this opaque old progress"}')
+        for apply in (False, True, True):
+            initialize(project, REPO, apply)
+            self.assertEqual(config.read_bytes(), before_config)
+            self.assertEqual(progress.read_text(), '{"synthetic":"preserve this opaque old progress"}')
+        self.assertTrue((project / '.agents/skills/personal-dev/scripts/pda/issue_watch.py').is_file())
+        self.assertFalse((project / '.local/agent/watch').exists())
+
+    def test_protocol_two_watch_migration_recovers_with_full_source(self):
+        from pda.transaction import apply_changes, atomic_write
+        prefix = '.agents/skills/personal-dev/scripts/pda/'
+        trans, added = prefix + 'transaction.py', prefix + 'issue_watch.py'
+        new = (self.root / trans).read_bytes()
+        old = new.replace(b", 'issue_watch'", b'')
+        (self.root / trans).write_bytes(old); (self.root / added).unlink()
+        before = self.snapshot()
+        changes = [dict(path=added, before=None, after=b'# synthetic watch runtime'),
+                   dict(path=trans, before=old, after=new)]
+        def fail(root, name, content, file_mode=0o644):
+            if name == trans: raise OSError('synthetic interruption')
+            atomic_write(root, name, content, file_mode)
+        with patch('pda.transaction.atomic_write', side_effect=fail):
+            with self.assertRaises(InstallError): apply_changes(self.root, changes)
+        result = subprocess.run([sys.executable, str(REPO / 'scripts/pda.py'), 'recover',
+                                 '--project', str(self.root), '--apply'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.snapshot(), before)
+
     def test_apply_rechecks_edits_made_after_preview(self):
         from pda.updates import update
         self.api()

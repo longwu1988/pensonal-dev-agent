@@ -90,6 +90,14 @@ class TrackerTests(unittest.TestCase):
         self.assertFalse(responses)
         return result, requests
 
+    def test_401_and_403_expose_typed_access_failure_without_private_response(self):
+        for code in (401, 403):
+            with self.assertRaises(issue_tracker.TrackerAccessDenied) as error:
+                self.run_responses(self.tracker(), [HTTPError('https://git.example/private', code,
+                                                            'private response', {}, io.BytesIO(b'secret'))])
+            self.assertNotIn('secret', str(error.exception))
+            self.assertNotIn('private', str(error.exception))
+
     def test_gitea_reads_small_pages_until_empty_and_filters_prs(self):
         tracker = self.tracker()
         result, requests = self.run_responses(tracker, [

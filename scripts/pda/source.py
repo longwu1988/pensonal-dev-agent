@@ -7,7 +7,7 @@ from .transaction import InstallError, RUNTIME
 
 REPOSITORY = 'longwu1988/pensonal-dev-agent'
 CHANNEL = 'main'
-PROTOCOL = 2
+PROTOCOL = 3
 STATIC = ('templates/project-guide.md', 'templates/project.json',
           'profiles/core.json', 'profiles/update.json', 'adapters/cursor/personal-dev.mdc')
 
