@@ -72,15 +72,16 @@ class NotificationTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_install_preview_repeat_recovery_and_user_audio_conflict(self):
-        with tempfile.TemporaryDirectory() as directory:
+        # Keep the same source identity across preview, install and repeat;
+        # otherwise a clean checkout records a distinct metadata transaction.
+        with tempfile.TemporaryDirectory() as directory, \
+             patch('pda.install.local_source', return_value=identity(None)):
             root = Path(directory)
             with contextlib.redirect_stdout(io.StringIO()), patch.object(notifications.subprocess, 'run') as run:
-                # Avoid mocking source identity's Git calls during installation.
-                with patch('pda.install.local_source', return_value=identity(None)):
-                    initialize(root, REPO, False)
-                    self.assertFalse((root / '.agents').exists())
-                    initialize(root, REPO, True)
-                    run.assert_not_called()
+                initialize(root, REPO, False)
+                self.assertFalse((root / '.agents').exists())
+                initialize(root, REPO, True)
+                run.assert_not_called()
             installed = root / '.agents/skills/personal-dev'
             asset = installed / 'assets/question-pending.wav'
             expected = (REPO / 'skills/personal-dev/assets/question-pending.wav').read_bytes()
