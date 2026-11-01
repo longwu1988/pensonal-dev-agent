@@ -71,6 +71,11 @@ OPERATION_TIMEOUT = 60
 PAGE_SIZE = 100
 
 
+class TrackerAccessDenied(InstallError):
+    """Authentication/permission denial needs explicit reconciliation."""
+    pass
+
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -200,6 +205,8 @@ class Tracker:
             raise
         except HTTPError as error:
             error.close()
+            if error.code in (401, 403):
+                raise TrackerAccessDenied('issue tracker access denied; verify authentication and permission') from None
             raise InstallError('issue tracker HTTP request failed') from None
         except (OSError, URLError, HTTPException, ValueError, UnicodeError, RecursionError):
             raise InstallError('issue tracker request or response failed') from None

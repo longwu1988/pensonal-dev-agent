@@ -137,4 +137,52 @@ class QueueCLITests(unittest.TestCase):
         r = self.run_cli('delivery-status', '--issue', '3')
         self.assertNotEqual(r.returncode, 0); self.assertIn('origin', r.stderr)
 
+    def test_watch_preview_status_stop_and_required_arguments(self):
+        r = self.run_cli('watch-status')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)['status'], 'off')
+        r = self.run_cli('watch-start', '--thread', 'synthetic-thread')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)['status'], 'preview')
+        self.assertFalse((self.root / '.local').exists())
+        r = self.run_cli('watch-start', '--thread', 'synthetic-thread', '--apply')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('permission', r.stderr)
+        self.assertNotEqual(self.run_cli('watch-tick', '--generation', 'old').returncode, 0)
+        (self.root / 'docs/agents/project.json').unlink()
+        r = self.run_cli('watch-stop')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(json.loads(r.stdout)['scheduler_cleanup_required'])
+
+    def test_watch_installed_runtime_and_reinstall_preserve_pending_authorization(self):
+        config_path = self.root / 'docs/agents/project.json'
+        config = json.loads(config_path.read_text())
+        config['permissions'].update(push_task_branch=True, write_issue=True)
+        config_path.write_text(json.dumps(config)); config_before = config_path.read_bytes()
+        r = self.run_cli('watch-start', '--thread', 'synthetic', '--interval', '0', '--apply')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse((self.root / '.local').exists())
+        r = self.run_cli('watch-start', '--thread', 'synthetic', '--interval', '300', '--apply')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        pending = json.loads(r.stdout)
+        self.assertEqual(pending['status'], 'pending')
+        state = self.root / '.local/agent/watch/state.json'; before = state.read_bytes()
+        for _ in range(2):
+            r = self.run_cli('init', '--apply')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(config_path.read_bytes(), config_before)
+            self.assertEqual(state.read_bytes(), before)
+        cli = self.root / '.agents/skills/personal-dev/scripts/pda.py'
+        r = subprocess.run([sys.executable, str(cli), 'watch-status', '--project', str(self.root)],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)['generation'], pending['generation'])
+        self.assertEqual(state.stat().st_mode & 0o777, 0o600)
+        r = self.run_cli('watch-bind', '--generation', pending['generation'], '--scheduler', 'synthetic-schedule')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.run_cli('queue-stop')
+        r = self.run_cli('watch-tick', '--generation', pending['generation'], '--scheduler', 'synthetic-schedule', '--thread', 'synthetic')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('revoked', r.stderr)
+
 if __name__=='__main__': unittest.main()

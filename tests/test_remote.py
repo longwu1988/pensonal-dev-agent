@@ -91,6 +91,16 @@ class DownloadTests(unittest.TestCase):
             with self.assertRaisesRegex(InstallError, 'protocol'):
                 with remote.download('a' * 40): self.fail('old protocol accepted')
 
+    def test_protocol_two_refuses_partial_watch_upgrade(self):
+        files, tree = self.payload()
+        old_runtime = tuple(name for name in remote.RUNTIME if name != 'scripts/pda/issue_watch.py')
+        with patch.object(remote, 'RUNTIME', old_runtime), patch.object(remote.Client, 'get', return_value=tree):
+            with self.assertRaisesRegex(InstallError, 'runtime'):
+                with remote.download('a'*40): self.fail('partial watch runtime accepted')
+        with patch.object(remote, 'PROTOCOL', 2), patch.object(remote.Client, 'get', side_effect=[tree, self.archive(files)]):
+            with self.assertRaisesRegex(InstallError, 'protocol'):
+                with remote.download('a'*40): self.fail('old protocol accepted watch')
+
     def test_large_unselected_member_is_rejected_before_decompression(self):
         files, tree = self.payload()
         # A sparse-looking tar header claims a huge file; no need to allocate it.

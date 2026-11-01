@@ -18,6 +18,7 @@ STOP = DIRECTORY + '/stop'
 LOCK = DIRECTORY + '/write.lock'
 REF = 'refs/heads/personal-dev/queue-lock'
 STAGES = {'claimed', 'planning', 'implementing', 'testing', 'waiting_user', 'reviewing', 'ready_to_merge'}
+_EXPLICIT_START = object()
 REASONS = {'needs_input', 'dependency', 'test_failed', 'auth', 'environment', 'review'}
 
 
@@ -33,6 +34,11 @@ def git(root, *args, data=None):
     if result.returncode:
         raise InstallError('queue Git operation failed; verify authentication, branch and ownership')
     return result.stdout.strip()
+
+
+class QueueConflict(InstallError):
+    """Requires reconciliation, not an automatic network retry."""
+    pass
 
 
 class QueueBusy(InstallError):
@@ -70,7 +76,7 @@ class GitLease:
     def release(self, sha):
         current = self.current()
         if current is None: return
-        if current != sha: raise InstallError('queue ownership belongs to another session; do not delete it')
+        if current != sha: raise QueueConflict('queue ownership belongs to another session; do not delete it')
         git(self.root, 'push', '--porcelain', '--force-with-lease=' + REF + ':' + sha, 'origin', ':' + REF)
         if self.current() is not None:
             raise InstallError('queue ownership release not confirmed')
@@ -186,7 +192,7 @@ class Queue:
 
     def _owner(self, state):
         if not self.owner or state.get('owner') != self.owner:
-            raise InstallError('queue belongs to a different active conversation')
+            raise QueueConflict('queue belongs to a different active conversation')
 
     def _active(self, state):
         self._owner(state)
@@ -194,30 +200,32 @@ class Queue:
             raise InstallError('queue is stopped; only explicit user start may resume')
         if (not self.tracker or state['repository'] != self.tracker.repository
                 or state['integration_branch'] != self.branch):
-            raise InstallError('queue repository or integration branch changed; reconcile saved work first')
+            raise QueueConflict('queue repository or integration branch changed; reconcile saved work first')
         if not state['lease'] or self.lease.current() != state['lease']:
-            raise InstallError('queue ownership missing or changed; stop work')
+            raise QueueConflict('queue ownership missing or changed; stop work')
         if self._stopped(state):
             raise InstallError('stop requested; do not advance')
 
-    def start(self):
-        acknowledged_stop = self._stop_token()
+    def start(self, expected_stop=_EXPLICIT_START):
+        acknowledged_stop = self._stop_token() if expected_stop is _EXPLICIT_START else expected_stop
         with self._locked():
             state = self.status()
+            if self._stop_token() != acknowledged_stop:
+                raise InstallError('stop requested before start; authorization revoked')
             if not self.tracker or not self.branch: raise InstallError('configured tracker and integration branch required')
             if not self.owner or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', self.owner):
                 raise InstallError('explicit conversation owner ID required')
             if state['enabled'] and state.get('owner') != self.owner:
-                raise InstallError('another conversation is running; stop it before transferring ownership')
+                raise QueueConflict('another conversation is running; stop it before transferring ownership')
             if state['repository'] is not None and (state['repository'] != self.tracker.repository or state['integration_branch'] != self.branch):
-                raise InstallError('queue binding changed; reconcile saved work before starting')
+                raise QueueConflict('queue binding changed; reconcile saved work before starting')
             # Acknowledge only the stop observed on entry; never delete a newer stop.
             state.update(repository=self.tracker.repository, integration_branch=self.branch,
                          enabled=False, stop_ack=acknowledged_stop, owner=self.owner)
             if state['session'] is None: state['session'] = str(uuid.uuid4())
             current = self.lease.current()
             if current is not None and current != state['lease']:
-                raise InstallError('repository queue is occupied; do not steal or expire its lock')
+                raise QueueConflict('repository queue is occupied; do not steal or expire its lock')
             if current is None:
                 state['lease'] = self.lease.prepare(state['session'] + '-' + str(uuid.uuid4()))
                 state['release'] = 'pending'
@@ -268,7 +276,7 @@ class Queue:
                 item = self.tracker.issue(state['current']['number'])
                 self._active(state)
                 if not eligible(item):
-                    raise InstallError('current issue closed, withdrawn or assigned; reconcile before continuing')
+                    raise QueueConflict('current issue closed, withdrawn or assigned; reconcile before continuing')
                 return {'status': 'resume', 'issue': item, 'checkpoint': state['current']}
             items = self.tracker.issues()
             self._active(state)
@@ -495,19 +503,8 @@ def validate_remote(root, repository):
             raise InstallError('origin fetch/push URL must match the configured issue repository')
 
 
-def dispatch(root, args):
-    """CLI boundary: resolve shared root, validate binding, then call a small state transition."""
-    root = main_project(root)
-    queue = Queue(root, owner=args.owner)
-    delivery_action = args.action.startswith('delivery-')
-    action = args.action.split('-', 1)[1]
-    if action == 'status' and not delivery_action: return queue.status()
-    if action == 'stop':
-        # Even malformed tracker config cannot prevent the local stop latch.
-        return queue.stop()
-    if action == 'checkpoint':
-        return queue.checkpoint(args.stage, args.branch, args.worktree, args.commit)
-    from .issue_tracker import Tracker, canonical_repository
+def configuration(root):
+    from .issue_tracker import canonical_repository
     try:
         config = json.loads(read(root, 'docs/agents/project.json') or b'{}')
         tracker = config['project']['tracker']
@@ -522,6 +519,23 @@ def dispatch(root, args):
     except (KeyError, TypeError, ValueError, UnicodeError):
         raise InstallError('valid tracker repository and integration branch configuration required') from None
     validate_remote(root, repository)
+    return config, tracker, repository, branch
+
+
+def dispatch(root, args):
+    """CLI boundary: resolve shared root, validate binding, then call a small state transition."""
+    root = main_project(root)
+    queue = Queue(root, owner=args.owner)
+    delivery_action = args.action.startswith('delivery-')
+    action = args.action.split('-', 1)[1]
+    if action == 'status' and not delivery_action: return queue.status()
+    if action == 'stop':
+        # Even malformed tracker config cannot prevent the local stop latch.
+        return queue.stop()
+    if action == 'checkpoint':
+        return queue.checkpoint(args.stage, args.branch, args.worktree, args.commit)
+    from .issue_tracker import Tracker
+    config, tracker, repository, branch = configuration(root)
     if delivery_action:
         delivery = Delivery(root, repository, branch)
         if action == 'status':
