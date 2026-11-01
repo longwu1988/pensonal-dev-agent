@@ -40,7 +40,7 @@ python3 .agents/skills/personal-dev/scripts/pda.py queue-claim --project . --own
 
 ## 共享环境与合并排队
 
-独立 worktree 只隔离代码。使用共享服务、端口、容器、测试库或主目录运行版本前，核对实际资源并约定相同名称，执行：
+资源锁仅覆盖当前仓库；不同工程共用物理资源时先按[跨工程环境隔离](local-validation.md#跨工程运行环境隔离)核对协调机制，不将同名锁视为全局锁。独立 worktree 只隔离代码。使用共享服务、端口、容器、测试库或主目录运行版本前，核对实际资源并约定相同名称，执行：
 
 ```sh
 python3 .agents/skills/personal-dev/scripts/pda.py queue-resource-acquire --project . --owner CURRENT_OWNER --resource environment:shared-test

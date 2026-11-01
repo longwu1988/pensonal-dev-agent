@@ -92,6 +92,12 @@ PR 合并后仍需同步本机、核对环境、回写并关闭工单，再检�
 
 本地收尾进度保存在 Git 忽略的 `.local/agent/delivery/`，由 Agent 使用 `delivery-status`、`delivery-record`、`delivery-check`；普通工单与队列取得占用后都使用 `queue-finish`，无需你手动运行一串命令。中断后先核对已完成动作，不重复发表评论。详见安装目录 `references/completion.md`。这些命令不自动测试、关单或后台续跑。
 
+## Worktree 放在哪里
+
+默认优先由宿主管理，使用返回的实际路径；Git 兜底时在工程根目录的 `.local/agent/worktrees/` 下，采用 `issue-编号-简述-唯一短ID`。分支默认 `codex/issue-编号-简述-唯一短ID`，工程明确约定优先。续接核对并复用原任务，旧目录不自动改名；当前分支和提交以 Git 为准。
+
+两个工程的目录通常分离，但端口、Docker 容器和测试数据仍需独立安排。个人智能体的资源锁按仓库隔离，目前没有跨工程全局环境锁。你可以说：“同时处理这两个工程，请先核对各自 worktree 归属、端口、Docker 项目名和测试数据隔离，冲突时保留其他工程环境。” 细则见安装目录 `references/worktree-layout.md` 和 `references/local-validation.md`。
+
 ## 批量处理工单
 
 先在工程仓库中为准备交给 AI 的工单添加 `ai-ready`。队列只处理未关闭、无指派人且没有其他流程状态标签 的工单，PR 不参与。可用 `p0` 至 `p3` 表示优先级，p0 最高；同级先处理较早创建的工单。

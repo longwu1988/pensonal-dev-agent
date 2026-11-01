@@ -27,7 +27,8 @@ description: Use when starting a project, implementing a tracked feature, fixing
 | 配置应用运行密钥，或使用服务器、仓库、设计平台等操作账号 | [运行凭据与 Agent 操作凭据](references/credentials.md) |
 | 界面实现、布局样式修改，含原型豁免与已有组件复用 | [界面一致性、原型与验收](references/ui-design.md) |
 | 切换本机运行版本、集成冒烟、恢复环境或验证失败后修复 | [本机环境验证与集成](references/local-validation.md) |
-| 创建/复用隔离目录、交付后回收或巡检遗留 worktree | [Worktree 生命周期与清理](references/worktree-lifecycle.md) |
+| 创建/复用隔离目录、同名工程或 worktree 命名冲突 | [Worktree 路径与命名](references/worktree-layout.md) |
+| 交付后回收或巡检遗留 worktree | [Worktree 生命周期与清理](references/worktree-lifecycle.md) |
 | 选择合并方式、创建/续接 PR、检查审查意见或合并状态 | [PR 合并方式与证据](references/pull-requests.md) |
 | 审查、推送、合并、打包、清理 | [交付流程](references/delivery.md) |
 | 需要协调、执行或独立审查职责 | [角色边界](references/roles.md) |
