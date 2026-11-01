@@ -4,6 +4,7 @@ from .issue_queue import (Queue, Delivery, GitLease, STOP, DIRECTORY as LEGACY_D
 from .issue_workers import WorkerQueue, DIRECTORY
 from .issue_claims import Claims
 from .issue_tracker import Tracker
+from .permissions import Permissions
 from .transaction import InstallError, safe_path
 
 
@@ -26,16 +27,63 @@ def validate_checkpoint_storage(root, repository, branch, record, stage):
                                   record['number'], record['commit'])
 
 
+
+CONTROL_PERMISSIONS = ('manage_claims', 'update_issue_labels')
+
+
+def scope_issue(state, requested=None):
+    current = state.get('current')
+    scope = state.get('issue_scope')
+    if current and scope is not None and current['number'] != scope:
+        raise InstallError('current issue is outside worker scope')
+    if requested is not None and scope is not None and requested != scope:
+        raise InstallError('requested issue is outside worker scope')
+    return current['number'] if current else (scope if scope is not None else requested)
+
+
+def bind_authorization(worker):
+    def check(state):
+        def before_write():
+            # Local checks only: never recurse into claims.ensure from a transport hook.
+            config, _, repository, branch = configuration(worker.root)
+            if repository != state['repository'] or branch != state['integration_branch']:
+                raise InstallError('permission repository or integration branch changed')
+            return Permissions(worker.root, repository, branch, worker.owner).require(
+                config.get('permissions', {}), scope_issue(state), CONTROL_PERMISSIONS)
+        effective = before_write()
+        worker.tracker.before_write = before_write
+        worker.claims.before_write = before_write
+        return effective
+    worker.authorization = check
+
+
+def permission_dispatch(root, args, config, repository, branch):
+    permissions = Permissions(root, repository, branch, args.owner)
+    action = args.action.split('-', 1)[1]
+    if action == 'status': return dict(record=permissions.status(), project_permissions=config.get('permissions', {}))
+    if action == 'revoke': return permissions.revoke(args.issue, args.evidence, apply=args.apply)
+    if action == 'grant':
+        allow = args.allow.split(',') if args.allow else []
+        deny = args.deny.split(',') if args.deny else []
+        return permissions.grant(args.issue, allow, deny, args.evidence, apply=args.apply)
+    capabilities = args.capability.split(',')
+    effective = permissions.require(config.get('permissions', {}), args.issue, capabilities)
+    return dict(status='allowed', owner=args.owner, issue=args.issue, capabilities=capabilities,
+                permissions=effective)
+
+
 def dispatch(root,args):
     root=main_project(root)
     worker=WorkerQueue(root,owner=args.owner)
     action=args.action.split('-',1)[1]
     delivery_action=args.action.startswith('delivery-')
-    if action=='status' and not delivery_action: return worker.status()
+    permission_action=args.action.startswith('permissions-')
+    if action=='status' and not delivery_action and not permission_action: return worker.status()
     if action in ('stop','legacy-stop'):
         validate_storage(root,worker)
         return Queue(root).stop() if action=='legacy-stop' else worker.stop()
     config,settings,repository,branch=configuration(root)
+    if permission_action: return permission_dispatch(root,args,config,repository,branch)
     if delivery_action:
         delivery=Delivery(root,repository,branch)
         if action=='status':
@@ -55,17 +103,18 @@ def dispatch(root,args):
                     source_owner=args.owner, target_owner=args.target_owner,
                     effect='transfer the stopped source worker current issue to the target owner; retain task checkpoints',
                     needs=['explicit user transfer', 'source stopped and shared resources released',
-                           'Git/API write access', 'push_task_branch and write_issue permissions'])
+                           'Git/API write access', 'manage_claims and update_issue_labels permissions'])
     if action == 'start' and not args.apply:
         return dict(status='preview',project=str(root),repository=repository,integration_branch=branch,
                     label='ai-ready',effect='per-issue remote claims, compatibility gate and stage labels; may trigger branch CI',
-                    needs=['explicit user start','Git/API write access','push_task_branch and write_issue permissions'])
+                    needs=['explicit user start','Git/API write access','manage_claims and update_issue_labels permissions'])
     if not delivery_action:
-        if any(config.get('permissions',{}).get(k) is not True for k in ('push_task_branch','write_issue')):
-            if action not in ('start','transfer') and not worker.status()['enabled']: raise InstallError('queue is stopped')
-            raise InstallError('record queue permissions before remote claim/label writes')
+        state = worker.status()
+        if action not in ('start','transfer') and not state['enabled']: raise InstallError('queue is stopped')
+        requested = getattr(args, 'issue', None) if action in ('start','claim','retry') else None
+        issue = scope_issue(state, requested)
+        Permissions(root, repository, branch, args.owner).require(config.get('permissions', {}), issue, CONTROL_PERMISSIONS)
         validate_storage(root,worker)
-        if action not in ('start','transfer') and not worker.status()['enabled']: raise InstallError('queue is stopped')
         if action == 'checkpoint':
             # Reject unsafe known local targets before any tracker or remote access.
             validate_checkpoint_storage(root, repository, branch, worker.status().get('current'), args.stage)
@@ -83,7 +132,8 @@ def dispatch(root,args):
         if worker.claims.get('issues/'+str(args.issue)):
             raise InstallError('remote claimed issue must use owner queue-finish')
         return delivery.check(args.issue,args.commit,worker.tracker,worker.lease)
-    if action=='start': return worker.start()
+    bind_authorization(worker)
+    if action=='start': return worker.start(issue=getattr(args,'issue',None))
     if action=='transfer': return worker.transfer(args.target_owner,args.evidence)
     if action=='next': return worker.next()
     if action=='claim': return worker.claim(args.issue)

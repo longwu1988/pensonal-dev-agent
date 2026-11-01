@@ -5,7 +5,7 @@ description: Use when starting a project, implementing a tracked feature, fixing
 
 # 个人开发任务入口
 
-从工程根目录读取 `AGENTS.md` 和 `docs/agents/project.json`；缺失配置时先列出缺口，只补当前阶段必要事实。遵守宿主与用户指令，本技能不授予外部写操作权限。
+从工程根目录读取 `AGENTS.md` 和 `docs/agents/project.json`；缺失配置时先列出缺口，只补当前阶段必要事实。遵守宿主与用户指令，本技能不授予外部写操作权限。工单启动/恢复、权限限制变化及平台写入前，必须读取[权限与作用域](references/permissions.md)，区分控制操作与业务写入，先记录当前限制再执行。
 
 用户要求持续监听、定时处理或以后新增工单也自动处理时，先读[持续检查](references/issue-watch.md)；只要求开始、结束、查看或续接工单队列时，先读[工单队列](references/issue-queue.md)并进入对应分支；停止优先于更新检查、澄清等待和交付收尾。
 

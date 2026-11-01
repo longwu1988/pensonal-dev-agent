@@ -17,6 +17,7 @@
 - 正式需求和 Bug [默认通过 PR 合并](skills/personal-dev/references/pull-requests.md)，保留工程明确的直接合并选择；由 Agent 调用平台工具执行，现有 CLI 不自动操作或核验 PR。
 - 普通工单与队列共用本地收尾记录和实时完成检查：验收续聊恢复原工单，推送后继续回写、关闭并读回；收尾检查不执行测试或关单，见[收尾规则](skills/personal-dev/references/completion.md)。
 - 工单队列默认关闭，支持一次性会话模式和显式开启的[持续检查模式](skills/personal-dev/references/issue-watch.md)：持续模式通过宿主定时唤醒处理后来新增的工单，停止会撤销旧唤醒；本机命令不独立运行模型。一次性模式中，用户明确开始后，由当前 Agent 串行处理符合条件的 `ai-ready` 工单；脚本负责每单远端原子占用与状态标签。每个会话一次处理一单，多会话可分别处理不同工单；共享环境和合并串行，普通指定工单同样必须领取。详见[占用与状态](skills/personal-dev/references/issue-claims.md)。真实仓库连续执行及 Codex/Cursor 会话验收仍待完成，用法见[工单队列](skills/personal-dev/references/issue-queue.md)。
+- 工单占用、状态标签和业务推送采用[独立权限](skills/personal-dev/references/permissions.md)；可只授权当前会话处理一张工单，保留不推送、不建 PR、不合并的限制。
 - Worktree 按[生命周期规则](skills/personal-dev/references/worktree-lifecycle.md)登记和回收：每单交付后检查、清理或记录保留原因，未完成及有占用项保留，本地分支默认至少保留 7 天。由 Agent 使用 Git/宿主原生工具执行，运行时仅提供队列清理边界检查，不是无人值守删除程序。
 - `skills/personal-dev/` 提供任务路由及协调/执行/审查职责。角色是可读职责定义，不是自动启动的宿主原生 Agent。
 - `main` 是工程接入与更新检查的入口；当前仍为试验能力，尚无 npm 包或稳定发布 Tag。

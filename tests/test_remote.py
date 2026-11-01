@@ -155,5 +155,27 @@ class DownloadTests(unittest.TestCase):
                 with remote.download('a'*40): self.fail('old protocol accepted worker update')
 
 
+    def test_protocol_five_refuses_partial_permissions_upgrade(self):
+        files, tree = self.payload()
+        added = 'scripts/pda/permissions.py'
+        self.assertIn(added, files)
+        self.assertEqual(json.loads(files['profiles/update.json']), {'protocol': 6})
+        old_runtime = tuple(name for name in remote.RUNTIME if name != added)
+        with patch.object(remote, 'RUNTIME', old_runtime), patch.object(remote, 'PROTOCOL', 5), \
+             patch.object(remote.Client, 'get', return_value=tree) as get:
+            with self.assertRaisesRegex(InstallError, 'runtime'):
+                with remote.download('a' * 40): self.fail('old updater accepted partial permission runtime')
+            self.assertEqual(get.call_count, 1)
+        with patch.object(remote, 'PROTOCOL', 5), \
+             patch.object(remote.Client, 'get', side_effect=[tree, self.archive(files)]):
+            with self.assertRaisesRegex(InstallError, 'protocol'):
+                with remote.download('a' * 40): self.fail('old protocol accepted permission update')
+        missing = dict(tree, tree=[item for item in tree['tree'] if item['path'] != added])
+        with patch.object(remote.Client, 'get', return_value=missing) as get:
+            with self.assertRaisesRegex(InstallError, 'lacks supported updater payload'):
+                with remote.download('a' * 40): self.fail('new updater accepted missing permission runtime')
+            self.assertEqual(get.call_count, 1)
+
+
 if __name__ == '__main__':
     unittest.main()

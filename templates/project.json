@@ -29,6 +29,9 @@
     "evidence": null
   },
   "permissions": {
+    "manage_claims": false,
+    "update_issue_labels": false,
+    "close_issue": false,
     "push_task_branch": false,
     "create_pr": false,
     "write_issue": false,

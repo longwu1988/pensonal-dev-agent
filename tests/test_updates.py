@@ -419,5 +419,101 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(self.snapshot(),before)
 
 
+    def test_protocol_five_permissions_upgrade_preserves_config_grants_and_workers(self):
+        from pda.config import project_config
+        from pda.permissions import Permissions
+        self.assertEqual(PROTOCOL, 6)
+        old_package = self.base / 'old-permissions-package'
+        shutil.copytree(self.package, old_package, ignore=shutil.ignore_patterns('.git', '__pycache__'))
+        trans = old_package / 'scripts/pda/transaction.py'
+        trans.write_text(trans.read_text().replace(", 'permissions'", ''))
+        (old_package / 'scripts/pda/permissions.py').unlink()
+        source = old_package / 'scripts/pda/source.py'
+        source.write_text(source.read_text().replace('PROTOCOL = ' + str(PROTOCOL), 'PROTOCOL = 5'))
+        (old_package / 'profiles/update.json').write_text('{"protocol":5}')
+        template = old_package / 'templates/project.json'
+        legacy = json.loads(template.read_bytes())
+        for name in ('manage_claims', 'update_issue_labels', 'close_issue'):
+            legacy['permissions'].pop(name)
+        legacy['permissions'].update(push_task_branch=True, write_issue=True)
+        template.write_text(json.dumps(legacy, indent=4) + '\n')
+        project = self.base / 'old-permissions-project'; project.mkdir()
+        result = subprocess.run([sys.executable, str(old_package / 'scripts/pda.py'), 'init',
+                                 '--project', str(project), '--apply'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        subprocess.run(['git', 'init', str(project)], check=True, capture_output=True)
+        config = project / 'docs/agents/project.json'
+        # Preserve a deliberately non-default serialization, not just equivalent JSON.
+        config.write_text(json.dumps(json.loads(config.read_bytes()), indent=4) + '\n\n')
+        repository = 'https://example.com/team/repo'
+        store = Permissions(project, repository, 'main', 'A')
+        store.grant(6, ['manage_claims', 'update_issue_labels'], ['write_issue'],
+                    'Synthetic user authorization for issue 6', apply=True)
+        worker = project / '.local/agent/workers/A/state.json'
+        worker.parent.mkdir(parents=True)
+        worker.write_text('{"version":2,"owner":"A","current":{"number":6,"stage":"testing"}}\n')
+        paths = [config, worker, project / store.path, project / store.lock]
+        before = {str(path): path.read_bytes() for path in paths}
+        for apply in (False, True, True):
+            initialize(project, REPO, apply)
+            self.assertEqual({str(path): path.read_bytes() for path in paths}, before)
+            effective = project_config(project, REPO)['permissions']
+            for name in ('manage_claims', 'update_issue_labels', 'close_issue'):
+                self.assertFalse(effective[name])
+                self.assertNotIn(name, json.loads(config.read_bytes())['permissions'])
+            self.assertTrue(effective['push_task_branch']); self.assertTrue(effective['write_issue'])
+            self.assertTrue(store.require(effective, 6, ['manage_claims'])['manage_claims'])
+            with self.assertRaises(InstallError): store.require(effective, 6, ['write_issue'])
+            other = Permissions(project, repository, 'main', 'B')
+            with self.assertRaises(InstallError): other.require(effective, 6, ['manage_claims'])
+        installed = project / '.agents/skills/personal-dev/scripts/pda/permissions.py'
+        self.assertEqual(installed.read_bytes(), (REPO / 'scripts/pda/permissions.py').read_bytes())
+        cli = project / '.agents/skills/personal-dev/scripts/pda.py'
+        result = subprocess.run([sys.executable, str(cli), '--help'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('permissions-grant', result.stdout)
+
+    def test_protocol_five_permission_migration_recovers_without_changing_local_authorization(self):
+        from pda.transaction import apply_changes, atomic_write
+        self.assertEqual(PROTOCOL, 6)
+        prefix = '.agents/skills/personal-dev/scripts/pda/'
+        trans, added = prefix + 'transaction.py', prefix + 'permissions.py'
+        new = (self.root / trans).read_bytes()
+        old = new.replace(b", 'permissions'", b'')
+        self.assertNotEqual(new, old)
+        (self.root / trans).write_bytes(old)
+        data = (self.root / added).read_bytes(); (self.root / added).unlink()
+        config = self.root / 'docs/agents/project.json'
+        legacy = json.loads(config.read_bytes())
+        for name in ('manage_claims', 'update_issue_labels', 'close_issue'):
+            legacy['permissions'].pop(name)
+        legacy['permissions'].update(push_task_branch=True, write_issue=True)
+        config.write_text(json.dumps(legacy, indent=4) + '\n\n')
+        local_paths = []
+        for name in ('permissions/A.json', 'permissions/A.lock', 'workers/A/state.json'):
+            path = self.root / '.local/agent' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('{"synthetic":"preserve local authorization and progress"}\n')
+            local_paths.append(path)
+        before_local = {str(path): path.read_bytes() for path in local_paths}
+        before = self.snapshot()
+        changes = [dict(path=added, before=None, after=data), dict(path=trans, before=old, after=new)]
+        def interrupt(root, name, content, file_mode=0o644):
+            if name == trans: raise OSError('synthetic permission migration interruption')
+            atomic_write(root, name, content, file_mode)
+        with patch('pda.transaction.atomic_write', side_effect=interrupt):
+            with self.assertRaisesRegex(InstallError, 'write interrupted'): apply_changes(self.root, changes)
+        old_result = subprocess.run([sys.executable, str(self.root / trans), '--project', str(self.root), '--apply'],
+                                    capture_output=True, text=True)
+        self.assertNotEqual(old_result.returncode, 0)
+        self.assertIn('unexpected recovery target', old_result.stderr)
+        for _ in range(2):
+            result = subprocess.run([sys.executable, str(REPO / 'scripts/pda.py'), 'recover',
+                                     '--project', str(self.root), '--apply'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self.snapshot(), before)
+            self.assertEqual({str(path): path.read_bytes() for path in local_paths}, before_local)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -199,13 +199,18 @@ def dispatch(root, args):
                     interval=300 if args.interval is None else args.interval, label='ai-ready',
                     needs=['explicit continuous authorization', 'same-thread host scheduler',
                            'API/Git access and queue permissions', 'verified scheduler binding'])
-    if any(config.get('permissions', {}).get(key) is not True for key in ('push_task_branch', 'write_issue')):
-        if action in ('tick', 'bind'): watch.suspend()
-        raise InstallError('record existing queue permissions before enabling or continuing watch')
-    # Choose the initial namespace before validating every actual worker write path.
+    # Continuous mode needs project-wide control permission; never borrow an issue grant.
     if action == 'start' and queue.owner is None:
         queue.owner = 'watch-' + uuid.uuid4().hex
-    from .worker_dispatch import validate_storage
+    from .worker_dispatch import validate_storage, bind_authorization, CONTROL_PERMISSIONS
+    from .permissions import Permissions
+    try:
+        Permissions(root, repository, branch, queue.owner).require(config.get('permissions', {}), None, CONTROL_PERMISSIONS)
+        if queue.status().get('issue_scope') is not None:
+            raise InstallError('single-issue worker cannot start continuous watch')
+    except InstallError:
+        if action in ('tick', 'bind'): watch.suspend()
+        raise
     validate_storage(root, queue)
     for directory in (DIRECTORY, '.local/agent/queue'):
         if git(root, 'ls-files', '--', directory): raise InstallError('watch/queue state must not be Git-tracked')
@@ -223,6 +228,7 @@ def dispatch(root, args):
         raise
     from .issue_claims import Claims
     queue.lease, queue.branch, queue.claims = GitLease(root, repository), branch, Claims(root, repository)
+    bind_authorization(queue)
     if action == 'start': return watch.start(args.thread, 300 if args.interval is None else args.interval)
     if action == 'bind': return watch.bind(args.generation, args.scheduler)
     if action == 'tick': return watch.tick(args.generation, args.scheduler, args.thread)

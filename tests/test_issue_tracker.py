@@ -247,6 +247,76 @@ class TrackerTests(unittest.TestCase):
                 tracker.issue(number)
 
 
+    def test_local_revocation_after_remote_reads_blocks_each_stage_mutation(self):
+        for action in ('create', 'attach', 'remove'):
+            for kind, repository in [('gitea', 'https://git.example/team/repo'),
+                                     ('github', 'https://github.com/team/repo')]:
+                with self.subTest(action=action, kind=kind):
+                    tracker = self.tracker(kind, repository)
+                    revoked = False
+                    target = {'id': 4, 'name': 'ai-in-progress'}
+                    old = {'id': 2, 'name': 'ai-ready'}
+                    current = [target, old] if action == 'remove' else []
+                    requests = []
+                    def authorize():
+                        if revoked: raise InstallError('authorization revoked')
+                    tracker.before_write = authorize
+                    def respond(request, timeout):
+                        nonlocal revoked, current
+                        method = request.get_method()
+                        requests.append(method)
+                        suffix = urlsplit(request.full_url).path.split('/team/repo')[-1]
+                        page = parse_qs(urlsplit(request.full_url).query).get('page', ['1'])[0]
+                        if method == 'GET':
+                            if suffix == '/issues/7': return Response({'number': 7})
+                            if suffix == '/labels':
+                                if action == 'create': revoked = True
+                                return Response([target] if action != 'create' and page == '1' else [])
+                            if suffix == '/issues/7/labels':
+                                revoked = True
+                                return Response(current if page == '1' else [])
+                        if method == 'POST' and suffix == '/labels': return Response(target, 201)
+                        if method == 'POST':
+                            current = [target]
+                            return Response(current)
+                        if method == 'DELETE':
+                            current = [target]
+                            return Response(b'', 204) if kind == 'gitea' else Response(current)
+                        raise AssertionError((method, suffix))
+                    with patch.object(issue_tracker, 'build_opener') as factory:
+                        factory.return_value.open.side_effect = respond
+                        with self.assertRaisesRegex(InstallError, 'authorization revoked'):
+                            tracker.set_stage(7, 'ai-in-progress')
+                    self.assertTrue(requests)
+                    self.assertEqual(set(requests), {'GET'})
+
+    def test_before_write_is_rechecked_between_mutations_and_not_on_reads(self):
+        tracker = self.tracker()
+        calls = []
+        def authorize():
+            calls.append('authorize')
+            if len(calls) > 1: raise InstallError('authorization revoked')
+        tracker.before_write = authorize
+        self.run_responses(tracker, [[]])
+        self.assertEqual(calls, [])
+        with patch.object(issue_tracker, 'build_opener') as factory:
+            factory.return_value.open.side_effect = [Response([]), Response(b'', 204)]
+            tracker._request('/labels', tracker._budget(), method='POST', data={})
+            with self.assertRaisesRegex(InstallError, 'authorization revoked'):
+                tracker._request('/issues/7/labels/2', tracker._budget(), method='DELETE', success=(204,))
+            self.assertEqual(factory.return_value.open.call_count, 1)
+        self.assertEqual(calls, ['authorize', 'authorize'])
+
+    def test_constructor_accepts_optional_local_write_guard(self):
+        def deny(): raise InstallError('authorization revoked')
+        tracker = self.tracker(before_write=deny)
+        self.run_responses(tracker, [[]])
+        with patch.object(issue_tracker, 'build_opener') as factory:
+            with self.assertRaisesRegex(InstallError, 'authorization revoked'):
+                tracker._request('/labels', tracker._budget(), method='POST')
+            factory.return_value.open.assert_not_called()
+
+
 class DefensiveBoundaryTests(unittest.TestCase):
     setUp = TrackerTests.setUp
     tracker = TrackerTests.tracker

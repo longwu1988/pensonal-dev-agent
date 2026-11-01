@@ -13,8 +13,9 @@ class ClaimConflict(QueueConflict):
 
 
 class Claims:
-    def __init__(self, root, repository=None):
+    def __init__(self, root, repository=None, before_write=None):
         self.root, self.repository = root, repository
+        self.before_write = before_write
 
     def _ref(self, key):
         if key == 'gate': return REF
@@ -56,6 +57,8 @@ class Claims:
         parents = ('-p', expected) if expected else ()
         sha = git(self.root, 'commit-tree', tree, *parents, data='Personal dev ownership record\n')
         ref = self._ref(key)
+        # A denied local guard is not a push failure and must not enter reconciliation.
+        if self.before_write is not None: self.before_write()
         try:
             git(self.root, 'push', '--porcelain', '--force-with-lease=' + ref + ':' + (expected or ''),
                 'origin', sha + ':' + ref)
@@ -125,5 +128,6 @@ class Claims:
         if value.get('owner') != owner or value.get('token') != token:
             raise ClaimConflict('shared resource belongs to another claim')
         ref = self._ref(key)
+        if self.before_write is not None: self.before_write()
         git(self.root, 'push', '--porcelain', '--force-with-lease=' + ref + ':' + value['_sha'], 'origin', ':' + ref)
         if self._head(key) is not None: raise ClaimConflict('resource release not confirmed')

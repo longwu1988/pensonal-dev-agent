@@ -1,6 +1,6 @@
 # 工单收尾记录与完成检查
 
-普通单工单与队列共同遵循本规则。所有新版工单均先按[工单占用](issue-claims.md)领取，续接时核对真实 owner，不能仅凭编号补写其他会话的收尾。用户确认测试通过、要求提交/push/合并，或从中断继续时，先恢复当前任务的工单与未完成阶段，再执行[交付流程](delivery.md)。不能把一句“push”当作忘掉原任务的理由；已有自动收尾授权继续适用。用户明确“只推送、不要关单”、等待、失败或停止时按新指令保留待办，不越权收尾，不恢复已停止的队列。
+普通单工单与队列共同遵循本规则。所有新版工单均先按[工单占用](issue-claims.md)领取，续接时核对真实 owner，不能仅凭编号补写其他会话的收尾。用户确认测试通过、要求提交/push/合并，或从中断继续时，先恢复当前任务的工单与未完成阶段，再执行[交付流程](delivery.md)。不能把一句“push”当作忘掉原任务的理由；已有自动收尾授权继续适用。用户明确“只推送、不要关单”或缩小范围时，先按[权限规则](permissions.md)记录本 owner/issue 的 deny，使其优先于工程 true；等待、失败或停止时按新指令保留待办，不越权收尾，不恢复已停止的队列。
 
 ## 关联与进度
 
@@ -35,7 +35,7 @@ python3 .agents/skills/personal-dev/scripts/pda.py delivery-record --project . -
 
 ## 回写、关闭和恢复
 
-完成适用验收、远端同步和环境核对后，按既有授权回写并关闭当前工单。回写前读取完整评论，优先更新或复用同一交付记录。可使用稳定标记 `personal-dev:delivery:<仓库>#<编号>:<最终SHA>` 定位本次评论；在 `issue_updated` 保存返回的链接/ID。
+完成适用验收、远端同步和环境核对后，分别在回写前检查 `write_issue`、关闭前检查 `close_issue`，并保持 `queue-guard` 有效；两项独立授权，详见[权限规则](permissions.md#每次外部写入前检查)。只取得标签/占用授权不能评论或关单。回写前读取完整评论，优先更新或复用同一交付记录。可使用稳定标记 `personal-dev:delivery:<仓库>#<编号>:<最终SHA>` 定位本次评论；在 `issue_updated` 保存返回的链接/ID。
 
 评论或关单请求超时、执行中断时，先重新读取评论与工单状态。已有相同评论则复用，不盲目重发；已关闭则核对依据，不重新打开再关闭。仍开放且所有条件满足时继续关单；无法确认结果或内容有新失败反馈时保持“待核对/待修复”。若用户已停止，保存剩余动作，不为了完成记录继续外部写入。
 
@@ -47,7 +47,7 @@ python3 .agents/skills/personal-dev/scripts/pda.py delivery-check --project . --
 
 该命令检查五项证据存在且绑定最终提交，再实时检查提交可达远端集成分支、读取工单确认关闭；仅本次返回 `verified` 才算脚本核验成功。它不执行测试、不判断证据文字真实性、不授予权限，也不自动推送、写评论、关单或启动服务。PR 是否实际合并及目标是否正确也不由该命令检查，须由 Agent 调用平台读取并保存证据；不得仅凭 verified 宣称 PR 已合并。最终内容、实际运行环境与工单最新评论仍由 Agent 按交付规则判断。
 
-普通已领取工单与队列均沿用 `queue-guard` 和停止优先规则，阶段证据用 `delivery-record` 保存；先取得同提交的 accepted 和 integration_verified 后进入 ready_to_merge，再取得集成锁进入 merging，最后由 **`queue-finish` 内部执行同一完成检查**。不能改用 `delivery-check` 绕过 owner/停止控制。旧任务缺记录时，从真实证据补齐，不重新开发或伪造验收。远端已关闭或 done 但本地仍有 current，领取/续接返回 finishing 时先核对已完成事实，在有效 owner 与续接授权下只补收尾。finish 成功才记远端 done、同步 ai-done 并清 current；标签/资源释放中断仍保留 current，重试继续原收尾，不重新执行开发。
+普通已领取工单与队列均沿用 `queue-guard` 和停止优先规则，阶段证据用 `delivery-record` 保存；先取得同提交的 accepted 和 integration_verified 后进入 ready_to_merge，再取得集成锁进入 merging，最后由 **`queue-finish` 内部执行同一完成检查**。不能改用 `delivery-check` 绕过 owner/停止控制或权限检查。旧任务缺记录时，从真实证据补齐，不重新开发或伪造验收。远端已关闭或 done 但本地仍有 current，领取/续接返回 finishing 时先核对已完成事实，在有效 owner 与续接授权下只补收尾。finish 成功才记远端 done、同步 ai-done 并清 current；标签/资源释放中断仍保留 current，重试继续原收尾，不重新执行开发。
 
 ## Worktree 收尾
 

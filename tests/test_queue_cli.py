@@ -168,7 +168,7 @@ class QueueCLITests(unittest.TestCase):
     def test_watch_installed_runtime_and_reinstall_preserve_pending_authorization(self):
         config_path = self.root / 'docs/agents/project.json'
         config = json.loads(config_path.read_text())
-        config['permissions'].update(push_task_branch=True, write_issue=True)
+        config['permissions'].update(manage_claims=True, update_issue_labels=True)
         config_path.write_text(json.dumps(config)); config_before = config_path.read_bytes()
         r = self.run_cli('watch-start', '--thread', 'synthetic', '--interval', '0', '--apply')
         self.assertNotEqual(r.returncode, 0)
@@ -200,7 +200,7 @@ class QueueCLITests(unittest.TestCase):
         from pda.issue_workers import WorkerQueue
         path = self.root / 'docs/agents/project.json'
         config = json.loads(path.read_text())
-        config['permissions'].update(push_task_branch=True, write_issue=True)
+        config['permissions'].update(manage_claims=True, update_issue_labels=True)
         path.write_text(json.dumps(config))
         worker = WorkerQueue(self.root, owner='synthetic')
         state = worker.status()

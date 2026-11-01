@@ -28,10 +28,11 @@ def eligible(item, require_ready=True):
 
 
 class WorkerQueue:
-    def __init__(self, root, tracker=None, lease=None, branch=None, owner=None, claims=None):
+    def __init__(self, root, tracker=None, lease=None, branch=None, owner=None, claims=None, authorization=None):
         self.root, self.tracker = Path(root), tracker
         self.lease, self.branch, self.owner = lease or GitLease(root), branch, owner
         self.claims = claims or Claims(root, tracker.repository if tracker else None)
+        self.authorization = authorization
 
     def _path(self, name):
         if not isinstance(self.owner, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', self.owner):
@@ -78,12 +79,21 @@ class WorkerQueue:
         if self._stop_token() != state.get('stop_ack'): state['enabled'] = False
         atomic_write(self.root, self._path('state.json'), json_bytes(state), 0o600)
 
+    def _authorize(self, state):
+        if self.authorization: self.authorization(state)
+
+    def _scope(self, state, number):
+        scope = state.get('issue_scope')
+        if scope is not None and scope != number:
+            raise InstallError('worker is limited to issue ' + str(scope) + '; do not process another issue')
+
     def _active(self, state):
         if (not state['enabled'] or self._stop_token() != state.get('stop_ack')):
             raise InstallError('worker stopped; only explicit start may resume')
         if (not self.tracker or state['repository'] != self.tracker.repository
                 or state['integration_branch'] != self.branch):
             raise ClaimConflict('worker repository or integration branch changed')
+        self._authorize(state)
         self.claims.ensure()
         if self._stop_token() != state.get('stop_ack'): raise InstallError('stop requested')
 
@@ -97,7 +107,8 @@ class WorkerQueue:
             raise ClaimConflict('issue belongs to another owner or generation; do not continue')
         return record
 
-    def start(self, expected_stop=_EXPLICIT_START):
+    def start(self, expected_stop=_EXPLICIT_START, issue=None):
+        if issue is not None and (type(issue) is not int or issue <= 0): raise InstallError("positive issue scope required")
         acknowledged = self._stop_token() if expected_stop is _EXPLICIT_START else expected_stop
         with self._locked():
             if self._stop_token() != acknowledged: raise InstallError('start authorization revoked by stop')
@@ -108,8 +119,15 @@ class WorkerQueue:
             if not self.tracker or not self.branch: raise InstallError('configured tracker and integration branch required')
             if state['repository'] and (state['repository'] != self.tracker.repository or state['integration_branch'] != self.branch):
                 raise ClaimConflict('worker binding changed; reconcile old work')
+            if issue is not None:
+                self._scope(state, issue)
+                if state.get('current') and state['current']['number'] != issue:
+                    raise InstallError('current issue differs from requested scope')
+                state['issue_scope'] = issue
+            state.update(repository=self.tracker.repository, integration_branch=self.branch)
+            self._authorize(state)
             self.claims.ensure()
-            state.update(enabled=True, repository=self.tracker.repository, integration_branch=self.branch, stop_ack=acknowledged)
+            state.update(enabled=True, stop_ack=acknowledged)
             self._save(state)
             return self.status()
 
@@ -127,6 +145,7 @@ class WorkerQueue:
                 or (not flow and not (state['current'].get('pending') and state['current'].get('manual'))) or not flow.issubset({STAGES[record['stage']], previous})):
             raise ClaimConflict('issue was assigned or its workflow labels changed; reconcile before writing')
         if flow != {STAGES[record['stage']]}:
+            self._authorize(state)
             self.tracker.set_stage(record['number'], STAGES[record['stage']])
         self._active(state)
         fresh = self._owned(state)
@@ -144,6 +163,7 @@ class WorkerQueue:
                 item = self.tracker.issue(current['number'])
                 if not eligible(item,not current.get('manual')): raise ClaimConflict('pending claim no longer eligible; reconcile')
                 self._active(state)
+                self._authorize(state)
                 record = self.claims.claim(current['number'], self.owner, current['token'], self.branch)
             if not record or (record.get('owner'), record.get('token')) != (self.owner, current['token']):
                 state['current'] = None; self._save(state)
@@ -161,6 +181,7 @@ class WorkerQueue:
         # Persist intent before the remote write so ambiguous responses remain recoverable.
         state['current'] = dict(number=number, token=token, stage='claimed', branch=None, worktree=None, commit=None, pending=True, manual=manual)
         self._save(state); self._active(state)
+        self._authorize(state)
         record = self.claims.claim(number, self.owner, token, self.branch)
         if record is None:
             state['current'] = None; self._save(state)
@@ -176,6 +197,7 @@ class WorkerQueue:
     def next(self):
         with self._locked():
             state = self.status(); self._active(state)
+            if state.get('issue_scope') is not None: raise InstallError('single-issue worker cannot run queue-next; use queue-claim')
             if state['current']:
                 result = self._resume(state)
                 if result['status'] != 'occupied': return result
@@ -195,7 +217,7 @@ class WorkerQueue:
     def claim(self, number):
         if type(number) is not int or number <= 0: raise InstallError('positive issue number required')
         with self._locked():
-            state=self.status(); self._active(state)
+            state=self.status(); self._scope(state,number); self._active(state)
             if state['current']:
                 if state['current']['number'] == number: return self._resume(state)
                 raise ClaimConflict('finish current issue before claiming another')
@@ -253,6 +275,7 @@ class WorkerQueue:
                 if accepted_commit:
                     Delivery(self.root,self.tracker.repository,self.branch).record(record['number'],accepted_commit,
                         'waiting_user','acceptance invalidated by stage '+stage)
+            self._authorize(state)
             record=self.claims.update(record,previous_stage=record['stage'],stage=stage,**changes)
             self._sync(state,record)
             return state
@@ -262,13 +285,18 @@ class WorkerQueue:
         if acquire:
             if name not in resources:
                 resources.append(name)
+                self._authorize(state)
                 record=self.claims.update(record,resources=resources)
             self._active(state)
+            self._authorize(state)
             if not self.claims.acquire_resource(name,self.owner,record['token']):
+                self._authorize(state)
                 record=self.claims.update(record,resources=[x for x in resources if x!=name])
                 raise ClaimConflict('shared resource busy; remain at current stage')
         else:
+            self._authorize(state)
             self.claims.release_resource(name,self.owner,record['token'])
+            self._authorize(state)
             record=self.claims.update(record,resources=[x for x in resources if x!=name])
         self._active(state)
         return record
@@ -296,6 +324,7 @@ class WorkerQueue:
             state=self.status(); record=self._owned(state)
             if record['stage']=='done': raise InstallError('completed claim cannot be blocked')
             self._sync(state, record)
+            self._authorize(state)
             record=self.claims.update(record,previous_stage=record['stage'],stage='blocked',reason=reason)
             self._sync(state,record)
             if record.get('resources'):
@@ -306,7 +335,7 @@ class WorkerQueue:
 
     def retry(self,number):
         with self._locked():
-            state=self.status(); self._active(state)
+            state=self.status(); self._scope(state,number); self._active(state)
             if state['current'] and state['current']['number'] != number: raise InstallError('finish current issue first')
             record=self.claims.get('issues/'+str(number))
             if not record or record['owner']!=self.owner or record['stage'] not in ('blocked','done'):
@@ -326,6 +355,7 @@ class WorkerQueue:
             if proof:
                 delivery.record(number,proof['commit'],'waiting_user','acceptance invalidated by explicit retry')
             state['current']=dict(number=number,token=record['token']); self._save(state)
+            self._authorize(state)
             record=self.claims.update(record,previous_stage=previous,stage='claimed',reason=None,commit=None)
             self._sync(state,record)
             return state
@@ -338,6 +368,7 @@ class WorkerQueue:
             Delivery(self.root,self.tracker.repository,self.branch).check(record['number'],commit,self.tracker,self.lease)
             self._active(state)
             if record['stage']!='done':
+                self._authorize(state)
                 record=self.claims.update(record,previous_stage=record['stage'],stage='done',commit=commit,evidence=evidence)
             self._sync(state,record)
             record=self._release_resources(state,record)
@@ -358,6 +389,7 @@ class WorkerQueue:
             if not current: raise InstallError('no current issue to transfer')
             if state['repository']!=self.tracker.repository or state['integration_branch']!=self.branch:
                 raise ClaimConflict('worker binding changed')
+            self._authorize(state)
             self.claims.ensure()
             record=self.claims.get('issues/'+str(current['number']))
             handoff=dict(owner=self.owner,token=current['token'])
@@ -368,6 +400,7 @@ class WorkerQueue:
             else:
                 if record['stage']=='done' or record.get('resources'):
                     raise InstallError('finish terminal cleanup or restore/release resources before transfer')
+                self._authorize(state)
                 record=self.claims.update(record,owner=target,token=uuid.uuid4().hex,handoff_from=handoff,
                                          handoff_evidence=evidence)
             state['current']=None

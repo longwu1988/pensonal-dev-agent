@@ -19,6 +19,10 @@ def relative(value, label):
 def validate(config, template):
     # Normalize supported project-owned shorthand in memory, never rewrite it.
     config = copy.deepcopy(config)
+    # Older project files stay byte-for-byte intact; missing split permissions grant nothing.
+    if isinstance(config, dict) and isinstance(config.get('permissions'), dict):
+        for key in ('manage_claims', 'update_issue_labels', 'close_issue'):
+            if key in template.get('permissions', {}): config['permissions'].setdefault(key, False)
     if isinstance(config, dict) and isinstance(config.get('apps'), list):
         for index, app in enumerate(config['apps']):
             if isinstance(app, dict) and set(app) in (

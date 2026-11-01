@@ -85,3 +85,68 @@ class ClaimTests(unittest.TestCase):
             return ''
         with patch('pda.issue_queue.git',side_effect=run):
             self.assertTrue(GitLease(self.root).contains('b'*40,'main'))
+
+
+    def assert_revoked_after_read_blocks_push(self, operation):
+        from unittest.mock import patch
+        from pda import issue_claims
+        from pda.transaction import InstallError
+        store = self.stores[0]
+        actual_git = issue_claims.git
+        revoked = False
+        pushes = []
+        def authorize():
+            if revoked: raise InstallError('authorization revoked')
+        store.before_write = authorize
+        def run(root, *args, **kwargs):
+            nonlocal revoked
+            if args[0] == 'push': pushes.append(args)
+            result = actual_git(root, *args, **kwargs)
+            if args[0] in ('ls-remote', 'show'): revoked = True
+            return result
+        before = actual_git(store.root, 'ls-remote', '--refs', 'origin')
+        with patch.object(issue_claims, 'git', side_effect=run):
+            with self.assertRaisesRegex(InstallError, 'authorization revoked'): operation(store)
+        self.assertEqual(pushes, [])
+        self.assertEqual(actual_git(store.root, 'ls-remote', '--refs', 'origin'), before)
+
+    def test_revocation_during_gate_read_prevents_ensure_push(self):
+        self.assert_revoked_after_read_blocks_push(lambda store: store.ensure())
+
+    def test_revocation_during_claim_read_prevents_claim_push(self):
+        self.assert_revoked_after_read_blocks_push(lambda store: store.claim(6, 'A', 'token', 'main'))
+
+    def test_revocation_after_claim_read_prevents_update_push(self):
+        self.stores[0].claim(6, 'A', 'token', 'main')
+        self.assert_revoked_after_read_blocks_push(
+            lambda store: store.update(store.get('issues/6'), stage='testing'))
+
+    def test_revocation_during_resource_read_prevents_acquire_push(self):
+        self.assert_revoked_after_read_blocks_push(
+            lambda store: store.acquire_resource('integration:main', 'A', 'token'))
+
+    def test_revocation_during_resource_read_prevents_release_push(self):
+        self.stores[0].acquire_resource('integration:main', 'A', 'token')
+        self.assert_revoked_after_read_blocks_push(
+            lambda store: store.release_resource('integration:main', 'A', 'token'))
+
+    def test_reads_and_idempotent_operations_do_not_call_write_guard(self):
+        store = self.stores[0]
+        store.ensure()
+        store.claim(6, 'A', 'token', 'main')
+        store.acquire_resource('integration:main', 'A', 'token')
+        def deny(): self.fail('read-only operation called write guard')
+        store.before_write = deny
+        self.assertIsNotNone(store.get('issues/6'))
+        self.assertTrue(store.resource_owned('integration:main', 'A', 'token'))
+        store.ensure()
+        self.assertIsNotNone(store.claim(6, 'A', 'token', 'main'))
+        self.assertTrue(store.acquire_resource('integration:main', 'A', 'token'))
+        store.release_resource('unowned', 'A', 'token')
+
+    def test_constructor_accepts_optional_local_write_guard(self):
+        from pda.transaction import InstallError
+        def deny(): raise InstallError('authorization revoked')
+        store = Claims(self.stores[0].root, before_write=deny)
+        self.assertIsNone(store.get('issues/6'))
+        with self.assertRaisesRegex(InstallError, 'authorization revoked'): store.ensure()
