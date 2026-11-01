@@ -19,7 +19,8 @@ description: Use when starting a project, implementing a tracked feature, fixing
 | 任务 | 读取 |
 | --- | --- |
 | 工单领取、并行会话、流程标签、转交、共享环境或合并排队 | [工单占用与隔离](references/issue-claims.md) |
-| 发出需要用户答复的确认问题，或关闭/恢复声音提醒 | [本地确认语音](references/question-notification.md) |
+| 发送确认问题、请求用户操作、补发缺推荐或缺超时说明的旧题 | 发送前完成[发问前检查](references/planning.md#发问前检查)，发送后按[本地确认语音](references/question-notification.md)提醒 |
+| 关闭/恢复声音提醒 | [本地确认语音](references/question-notification.md) |
 | 空白工程、大需求、技术栈或架构变化 | [建设与规格](references/planning.md) |
 | 拉取工单、理解评论和截图、续接工单或交付前核对补充 | [工单全文、评论与图片](references/issue-context.md) |
 | 正式功能、局部 Bug、界面实现 | [实施流程](references/implementation.md) |
