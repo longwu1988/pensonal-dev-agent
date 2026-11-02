@@ -137,7 +137,25 @@ def show(changes):
         print("".join(difflib.unified_diff(before, after, fromfile=name, tofile=name)), end="")
 
 
+def show_next_steps(root, *, updated=False):
+    """Display the installed guide's quick start without duplicating its prompts."""
+    print("\n下一步：在目标工程的新会话中发送任务。")
+    if updated:
+        print("更新后请在新会话读取规则；已有任务按原进度核对后续接。")
+    try:
+        guide = (read(root, "docs/agents/README.md") or b"").decode("utf-8")
+        heading = "\n## 快速开始\n"
+        section = guide.split(heading, 1)[1].split("\n## ", 1)[0].strip() if heading in guide else ""
+    except (OSError, UnicodeError, InstallError):
+        section = ""
+    if section:
+        print(section)
+    else:
+        print("使用案例与注意事项请查看 docs/agents/README.md。")
+
+
 def initialize(root, package, apply=False):
+    previously_installed = read(root, MANIFEST) is not None
     changes = plan(root, package)
     show(changes)
     if not apply:
@@ -148,6 +166,10 @@ def initialize(root, package, apply=False):
                 raise InstallError("project changed after preview; retry init")
             apply_changes(root, changes)
         print("Installed locally. External dependencies and host behavior remain unverified.")
+    if apply:
+        if not changes:
+            print("接入文件无变化，可继续使用。")
+        show_next_steps(root, updated=previously_installed and bool(changes))
 
 
 def doctor(root, package):
