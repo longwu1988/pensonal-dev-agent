@@ -37,6 +37,7 @@ class InstallTests(unittest.TestCase):
         result = self.run_cli("init")
         self.assertIn("AGENTS.md", result.stdout)
         self.assertIn("+", result.stdout)
+        self.assertNotIn("\n下一步：", result.stdout)
         self.assertEqual(self.snapshot(), {})
 
     def test_install_repeat_and_recover_preserves_existing_files(self):
@@ -46,12 +47,18 @@ class InstallTests(unittest.TestCase):
         (self.root / ".gitignore").write_bytes(b"build/\n")
         (self.root / ".mcp.json").write_bytes(b'{"keep":"untouched"}')
         before = self.snapshot()
-        self.run_cli("init", "--apply")
+        result = self.run_cli("init", "--apply")
+        guide = (self.root / "docs/agents/README.md").read_text()
+        quick_start = guide.split("\n## 快速开始\n", 1)[1].split("\n## ", 1)[0].strip()
+        self.assertIn("\n下一步：", result.stdout)
+        self.assertIn(quick_start, result.stdout)
         self.assertTrue((self.root / "AGENTS.md").read_bytes().startswith(original))
         self.assertEqual((self.root / "AGENTS.md").stat().st_mode & 0o777, 0o640)
         self.assertTrue((self.root / ".agents/skills/personal-dev/SKILL.md").is_file())
         after = self.snapshot()
-        self.run_cli("init", "--apply")
+        repeated = self.run_cli("init", "--apply")
+        self.assertIn("接入文件无变化", repeated.stdout)
+        self.assertIn(quick_start, repeated.stdout)
         self.assertEqual(self.snapshot(), after)
         self.run_cli("recover", "--apply")
         actual = {p: v for p, v in self.snapshot().items() if not p.startswith(".local/")}
@@ -106,6 +113,7 @@ class InstallTests(unittest.TestCase):
         before = self.snapshot()
         result = self.run_cli("init", "--apply", ok=False)
         self.assertIn("conflict", result.stderr.lower())
+        self.assertNotIn("\n下一步：", result.stdout)
         self.assertEqual(self.snapshot(), before)
 
     def test_unowned_collision_is_not_adopted(self):

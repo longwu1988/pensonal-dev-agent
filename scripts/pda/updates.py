@@ -3,7 +3,7 @@ import json
 import time
 
 from . import remote
-from .install import MANIFEST, plan, show
+from .install import MANIFEST, plan, show, show_next_steps
 from .source import CHANNEL, REPOSITORY, identity, revision
 from .transaction import (InstallError, apply_changes, atomic_write, ensure_ready,
                           json_bytes, locked, read)
@@ -123,3 +123,4 @@ def update(root, target, apply=False):
             if changes:
                 apply_changes(root, changes)
         print('Updated to ' + target + '. Start a new task to load new rules. recover can restore this transaction.')
+        show_next_steps(root, updated=True)

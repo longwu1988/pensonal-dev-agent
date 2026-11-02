@@ -170,18 +170,52 @@ class UpdateTests(unittest.TestCase):
         from pda.updates import update
         path = self.package / 'skills/personal-dev/SKILL.md'
         path.write_text(path.read_text() + '\nSynthetic approved change\n')
+        guide = self.package / 'templates/project-guide.md'
+        guide.write_text(guide.read_text().replace('## 快速开始\n', '## 快速开始\n\nSynthetic new-version guidance.\n'))
         self.git('add', '.')
         self.git('commit', '-m', 'new')
         self.new = self.git('rev-parse', 'HEAD')
         self.api()
         before = self.snapshot()
         with patch('pda.updates.remote.download', return_value=contextlib.nullcontext(self.package)) as download:
-            update(self.root, self.new)
+            preview = io.StringIO()
+            with contextlib.redirect_stdout(preview):
+                update(self.root, self.new)
+            self.assertNotIn('\n下一步：', preview.getvalue())
             self.assertEqual(self.snapshot(), before)
-            update(self.root, self.new, apply=True)
+            applied = io.StringIO()
+            with contextlib.redirect_stdout(applied):
+                update(self.root, self.new, apply=True)
+            completion = applied.getvalue().split('\n下一步：', 1)[1]
+            self.assertIn('Synthetic new-version guidance.', completion)
+            self.assertIn('新会话', completion)
+            self.assertEqual((self.root / 'docs/agents/project.json').read_bytes(), before['docs/agents/project.json'])
             self.assertEqual(download.call_args.args, (self.new,))
         self.assertEqual(self.installed()['source']['commit'], self.new)
         recover(self.root, True)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_failed_update_does_not_show_next_steps(self):
+        from pda.updates import update
+        self.api()
+        before = self.snapshot()
+        output = io.StringIO()
+        with patch('pda.updates.remote.download', return_value=contextlib.nullcontext(self.package)), \
+                patch('pda.updates.apply_changes', side_effect=InstallError('synthetic failure')), \
+                contextlib.redirect_stdout(output):
+            with self.assertRaisesRegex(InstallError, 'synthetic failure'):
+                update(self.root, self.new, apply=True)
+        self.assertNotIn('\n下一步：', output.getvalue())
+        self.assertEqual(self.snapshot(), before)
+
+    def test_guide_without_quick_start_uses_document_fallback(self):
+        from pda.install import show_next_steps
+        (self.root / 'docs/agents/README.md').write_text('# Legacy guide\n')
+        output = io.StringIO()
+        before = self.snapshot()
+        with contextlib.redirect_stdout(output):
+            show_next_steps(self.root, updated=True)
+        self.assertIn('docs/agents/README.md', output.getvalue())
         self.assertEqual(self.snapshot(), before)
 
     def test_interrupted_runtime_upgrade_recovers_in_independent_process(self):
