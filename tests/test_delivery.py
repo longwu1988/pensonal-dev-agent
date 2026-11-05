@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from pda.transaction import InstallError
 from pda import issue_queue as module
-from test_issue_queue import Tracker, Lease
+from test_issue_queue import Tracker, Lease, stage_evidence
 
 COMMIT = 'a' * 40
 STEPS = ('accepted', 'integration_verified', 'remote_synced', 'environment_restored', 'issue_updated')
@@ -24,7 +24,7 @@ class DeliveryTests(unittest.TestCase):
 
     def ready(self):
         for stage in STEPS:
-            self.delivery.record(1, COMMIT, stage, 'synthetic evidence for ' + stage)
+            self.delivery.record(1, COMMIT, stage, stage_evidence(stage))
         self.lease.merged = True
         self.tracker.items[1]['state'] = 'closed'
 
@@ -77,12 +77,25 @@ class DeliveryTests(unittest.TestCase):
     def test_repeated_checkpoint_is_idempotent_but_changed_early_evidence_invalidates_later(self):
         self.ready()
         before = self.delivery.status(1)
-        self.delivery.record(1, COMMIT, 'accepted', 'synthetic evidence for accepted')
+        self.delivery.record(1, COMMIT, 'accepted', stage_evidence('accepted'))
         self.assertEqual(before, self.delivery.status(1))
-        self.delivery.record(1, COMMIT, 'accepted', 'new acceptance')
+        self.delivery.record(1, COMMIT, 'accepted', '单元测试命令 pytest tests/test_app.py 退出码 0 复跑')
         self.assertEqual(self.delivery.status(1)['missing'], list(STEPS[1:]))
         self.ready(); self.delivery.record(1, COMMIT, 'waiting_user', 'user reports failure')
         self.assertEqual(self.delivery.status(1)['missing'], list(STEPS))
+
+    def test_accepted_rejects_bare_pass_and_not_applicable(self):
+        for evidence in ('已通过', '通过', '不适用', 'not applicable', 'N/A'):
+            with self.subTest(evidence=evidence):
+                with self.assertRaisesRegex(InstallError, 'accepted|skipped'):
+                    self.delivery.record(1, COMMIT, 'accepted', evidence)
+        self.assertFalse((self.root / '.local').exists())
+        recorded = self.delivery.record(1, COMMIT, 'accepted', '无单元测试，留给用户验收')
+        self.assertIn('accepted', recorded['record']['steps'])
+        with self.assertRaisesRegex(InstallError, '构建验收留给用户'):
+            self.delivery.record(1, COMMIT, 'integration_verified', '已通过')
+        noted = self.delivery.record(1, COMMIT, 'integration_verified', stage_evidence('integration_verified'))
+        self.assertIn('不是构建验收', noted['integration_verified_means'])
 
     def test_binding_corruption_symlink_and_invalid_input_rejected(self):
         self.ready()
@@ -96,7 +109,7 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaises(InstallError): self.delivery.status(1)
         path.unlink(); outside = self.root / 'external'; outside.write_text('untouched')
         path.symlink_to(outside)
-        with self.assertRaises(InstallError): self.delivery.record(1, COMMIT, 'accepted', 'evidence')
+        with self.assertRaises(InstallError): self.delivery.record(1, COMMIT, 'accepted', stage_evidence('accepted'))
         self.assertEqual(outside.read_text(), 'untouched')
 
     def test_queue_finish_requires_shared_delivery_evidence(self):

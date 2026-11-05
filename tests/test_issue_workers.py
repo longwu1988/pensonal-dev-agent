@@ -9,7 +9,7 @@ from pda.issue_workers import WorkerQueue
 from pda.issue_claims import ClaimConflict
 from pda.issue_queue import Delivery, DELIVERY_STEPS
 from pda.transaction import InstallError
-from test_issue_queue import Tracker, Lease, issue
+from test_issue_queue import Tracker, Lease, issue, stage_evidence
 
 
 class MemoryClaims:
@@ -59,7 +59,7 @@ class WorkerTests(unittest.TestCase):
     def ready(self, q):
         number = q.status()['current']['number']
         for stage in ('accepted', 'integration_verified'):
-            Delivery(q.root, self.tracker.repository, 'main').record(number, 'a'*40, stage, 'synthetic '+stage)
+            Delivery(q.root, self.tracker.repository, 'main').record(number, 'a'*40, stage, stage_evidence(stage))
         q.checkpoint('ready_to_merge', commit='a'*40)
     def test_two_sessions_and_two_clones_claim_different_issues(self):
         self.a.start(); self.b.start()
@@ -118,7 +118,7 @@ class WorkerTests(unittest.TestCase):
     def test_completed_record_survives_new_clone_and_reopen(self):
         self.a.start(); self.a.next(); self.ready(self.a); self.a.checkpoint('merging')
         for stage in DELIVERY_STEPS:
-            Delivery(self.root,self.tracker.repository,'main').record(1,'a'*40,stage,'synthetic '+stage)
+            Delivery(self.root,self.tracker.repository,'main').record(1,'a'*40,stage,stage_evidence(stage))
         self.tracker.items[1]['state']='closed'
         self.a.finish('a'*40,'synthetic evidence')
         self.assertEqual(self.claims.get('issues/1')['stage'],'done')
@@ -156,7 +156,7 @@ class WorkerTests(unittest.TestCase):
     def test_done_cannot_return_to_development_after_label_failure(self):
         self.a.start(); self.a.next(); self.ready(self.a); self.a.checkpoint('merging')
         for stage in DELIVERY_STEPS:
-            Delivery(self.root,self.tracker.repository,'main').record(1,'a'*40,stage,'synthetic '+stage)
+            Delivery(self.root,self.tracker.repository,'main').record(1,'a'*40,stage,stage_evidence(stage))
         self.tracker.items[1]['state']='closed'
         with patch.object(self.tracker,'set_stage',side_effect=InstallError('offline')):
             with self.assertRaises(InstallError): self.a.finish('a'*40,'evidence')

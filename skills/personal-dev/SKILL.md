@@ -1,6 +1,6 @@
 ---
 name: personal-dev
-description: Use when starting a project, implementing a tracked feature, fixing a bug, receiving acceptance feedback, committing/pushing an existing task, preparing delivery, or starting, stopping, inspecting or resuming an issue queue, or continuously monitoring future issues, or inspecting/cleaning task worktrees in a project using the personal development system. Not for concept-only questions or unrelated tasks.
+description: Use when starting a project, designing or prototyping project UI, implementing a tracked feature, fixing a bug, receiving acceptance feedback, committing/pushing an existing task, preparing delivery, or starting, stopping, inspecting or resuming an issue queue, or continuously monitoring future issues, or inspecting/cleaning task worktrees in a project using the personal development system. Not for concept-only questions or unrelated tasks.
 ---
 
 # 个人开发任务入口
@@ -12,22 +12,22 @@ description: Use when starting a project, implementing a tracked feature, fixing
 新任务首次启用本技能时先按[版本检查与更新选择](references/updates.md)调用检查入口；同一任务续聊不重复检查或更换规则。检查失败沿用已安装版本，不阻塞业务。
 
 1. 判断任务与已完成阶段，复用工单、用户确认及现有 worktree 的证据。涉及关键未知项时按[澄清与推荐选择](references/planning.md#关键疑问先澄清)处理，默认提供推荐并真实等待 60 秒，满足前置条件后采用推荐继续；无需单独启用，明确关闭、必须等回复或暂停时遵循该规则的等待分支；按下表读取其余分支。
-2. 正式工单（含普通编号、新建和续接）先按[工单占用与隔离](references/issue-claims.md)取得当前会话占用；其他会话占用或已完成时不重复开发。开始实现前明确验收条件、集成分支、影响应用及对应目录规则；修改端不明确时按[实施流程](references/implementation.md)先确认范围，并读取[测试责任](references/testing.md)；默认 Agent 测试，用户明确自测时按用户模式交付。未知环境不视为已验证。
+2. 正式工单进行中先运行 `python3 .agents/skills/personal-dev/scripts/pda.py task-next --project . --owner CURRENT_OWNER --issue N`。它只读，不领取、不测试、不合入。只打开返回的 `read`；`can_merge` 为 false 时不合入。返回的 `ask` 要求决定时，先写「待你确认」。源码仓库里的入口是 `python3 scripts/pda.py`。没有当前工单时，仍先按[工单占用与隔离](references/issue-claims.md)取得当前会话占用；其他会话占用或已完成时不重复开发。开始实现前明确验收条件、集成分支、影响应用及对应目录规则；修改端不明确时按[实施流程](references/implementation.md)先确认范围，并读取[测试责任](references/testing.md)。默认在 worktree 只运行受影响代码的单元测试，通过后按本机验证规则串行合入集成分支；构建和整体运行验收由用户在合入后进行。用户明确自测时，单元测试也改由用户确认后再合入。未跑过的测试不视为已通过。
 3. 用户确认通过、要求提交/push/合并或从中断续接时，先读[工单收尾检查](references/completion.md)，恢复原任务的关联与未完成步骤；已有授权下完成关单及读回核验，不能只做最后一句 Git 动作。用户明确限定动作或停止时保留剩余待办。
 4. 移交时保留“当前阶段、依据、下一动作、验证缺口”。交付前读取交付分支，不能以提交成功代替验收。
 
 | 任务 | 读取 |
 | --- | --- |
 | 工单领取、并行会话、流程标签、转交、共享环境或合并排队 | [工单占用与隔离](references/issue-claims.md) |
-| 发送确认问题、请求用户操作、补发缺推荐或缺超时说明的旧题 | 发送前完成[发问前检查](references/planning.md#发问前检查)，发送后按[本地确认语音](references/question-notification.md)提醒 |
+| 发送确认问题、请求用户操作、补发缺推荐或缺超时说明的旧题 | 先按[问题展示](references/planning.md#问题展示)在当前回复写出「待你确认」，完成[发问前检查](references/planning.md#发问前检查)后，再按[本地确认语音](references/question-notification.md)提醒 |
 | 关闭/恢复声音提醒 | [本地确认语音](references/question-notification.md) |
 | 空白工程、大需求、技术栈或架构变化 | [建设与规格](references/planning.md) |
 | 拉取工单、理解评论和截图、续接工单或交付前核对补充 | [工单全文、评论与图片](references/issue-context.md) |
 | 正式功能、局部 Bug、界面实现 | [实施流程](references/implementation.md) |
 | 安装或更新依赖、下载工具链、配置 CI/Docker 构建源 | [依赖下载与镜像](references/dependency-downloads.md) |
 | 配置应用运行密钥，或使用服务器、仓库、设计平台等操作账号 | [运行凭据与 Agent 操作凭据](references/credentials.md) |
-| 界面实现、布局样式修改，含原型豁免与已有组件复用 | [界面一致性、原型与验收](references/ui-design.md) |
-| 切换本机运行版本、集成冒烟、恢复环境或验证失败后修复 | [本机环境验证与集成](references/local-validation.md) |
+| 界面设计或原型（含只做 Figma/其他工具设计）、界面实现、布局样式修改 | 在调用设计/生成工具前读取[界面一致性、原型与验收](references/ui-design.md)；免除原型仍需核对现有界面依据 |
+| 单元测试后合入集成分支、避免多个 worktree 同时合入，或验证失败后修复 | [本机环境验证与集成](references/local-validation.md) |
 | 创建/复用隔离目录、同名工程或 worktree 命名冲突 | [Worktree 路径与命名](references/worktree-layout.md) |
 | 交付后回收或巡检遗留 worktree | [Worktree 生命周期与清理](references/worktree-lifecycle.md) |
 | 选择合并方式、创建/续接 PR、检查审查意见或合并状态 | [PR 合并方式与证据](references/pull-requests.md) |
