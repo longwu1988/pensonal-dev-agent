@@ -38,7 +38,14 @@ def validate(config, template):
                                          'rules': None, 'validation': checks}
     def shape(value, sample, key):
         if isinstance(sample, dict):
-            if not isinstance(value, dict) or value.keys() != sample.keys():
+            if not isinstance(value, dict):
+                raise InstallError("invalid config keys: " + key)
+            # Project-owned figma may keep extra authority/archive/notes fields;
+            # require template keys and leave unknown siblings untouched.
+            if key == "config.figma":
+                if not set(sample).issubset(value):
+                    raise InstallError("invalid config keys: " + key)
+            elif value.keys() != sample.keys():
                 raise InstallError("invalid config keys: " + key)
             for name in sample:
                 shape(value[name], sample[name], key + "." + name)

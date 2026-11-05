@@ -106,6 +106,26 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(json.loads(config.read_text()), value)
         self.assertTrue(agents.read_text().startswith("My new rules\n"))
 
+    def test_figma_project_owned_extras_survive_init(self):
+        self.run_cli("init", "--apply")
+        config = self.root / "docs/agents/project.json"
+        value = json.loads(config.read_text())
+        value["figma"] = {
+            "references": ["https://www.figma.com/design/example"],
+            "status": "web-and-mobile-design-systems-v1",
+            "authority": {"web-admin": "https://www.figma.com/design/example"},
+            "archive": None,
+            "notes": "project-owned design system notes",
+        }
+        raw = (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode()
+        config.write_bytes(raw)
+        self.run_cli("init", "--apply")
+        self.assertEqual(config.read_bytes(), raw)
+        from pda.config import project_config
+        effective = project_config(self.root, REPO)["figma"]
+        self.assertEqual(effective["authority"]["web-admin"], "https://www.figma.com/design/example")
+        self.assertEqual(effective["notes"], "project-owned design system notes")
+
     def test_modified_owned_file_blocks_every_write(self):
         self.run_cli("init", "--apply")
         skill = self.root / ".agents/skills/personal-dev/SKILL.md"
