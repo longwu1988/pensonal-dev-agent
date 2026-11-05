@@ -117,7 +117,7 @@ class QueueCLITests(unittest.TestCase):
         self.assertFalse(json.loads(self.run_cli('queue-status').stdout)['enabled'])
 
     def test_delivery_checks_actual_record_lock_and_archive_ignore_rules(self):
-        args = ('delivery-record', '--issue', '3', '--commit', 'a'*40, '--stage', 'accepted', '--evidence', 'synthetic')
+        args = ('delivery-record', '--issue', '3', '--commit', 'a'*40, '--stage', 'accepted', '--evidence', '单元测试命令 pytest tests/test_app.py 退出码 0')
         for rules in ('/.local/agent/delivery/*.json\n!/.local/agent/delivery/3.json\n',
                       '/.local/agent/delivery/*.json\n'):
             with self.subTest(rules=rules):
@@ -138,7 +138,7 @@ class QueueCLITests(unittest.TestCase):
         r = self.run_cli('delivery-record', '--issue', '3')
         self.assertNotEqual(r.returncode, 0)
         self.assertFalse((self.root / '.local').exists())
-        args = ('delivery-record', '--issue', '3', '--commit', 'a'*40, '--stage', 'accepted', '--evidence', 'synthetic')
+        args = ('delivery-record', '--issue', '3', '--commit', 'a'*40, '--stage', 'accepted', '--evidence', '单元测试命令 pytest tests/test_app.py 退出码 0')
         r = self.run_cli(*args); self.assertEqual(r.returncode, 0, r.stderr)
         subprocess.run(['git','-C',str(self.root),'add','-f','.local/agent/delivery/3.json'],check=True,capture_output=True)
         r = self.run_cli(*args)
@@ -215,7 +215,7 @@ class QueueCLITests(unittest.TestCase):
         from pda.transaction import InstallError
         args = self.checkpoint_fixture()
         result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'b'*40,
-                              '--stage', 'accepted', '--evidence', 'synthetic accepted revision')
+                              '--stage', 'accepted', '--evidence', '单元测试命令 pytest tests/test_app.py 退出码 0')
         self.assertEqual(result.returncode, 0, result.stderr)
         state = self.root / '.local/agent/delivery/3.json'
         before = state.read_bytes()
@@ -240,7 +240,7 @@ class QueueCLITests(unittest.TestCase):
         args = self.checkpoint_fixture(stage='implementing')
         args.stage = 'waiting_user'
         result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'a'*40,
-                              '--stage', 'accepted', '--evidence', 'synthetic')
+                              '--stage', 'accepted', '--evidence', '单元测试命令 pytest tests/test_app.py 退出码 0')
         self.assertEqual(result.returncode, 0, result.stderr)
         state = self.root / '.local/agent/delivery/3.json'
         before = state.read_bytes()
@@ -257,7 +257,7 @@ class QueueCLITests(unittest.TestCase):
         from pda.worker_dispatch import dispatch
         args = self.checkpoint_fixture()
         result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'a'*40,
-                              '--stage', 'accepted', '--evidence', 'synthetic')
+                              '--stage', 'accepted', '--evidence', '单元测试命令 pytest tests/test_app.py 退出码 0')
         self.assertEqual(result.returncode, 0, result.stderr)
         # The invalidation writes current.commit (a), not the requested next commit (c).
         (self.root / '.gitignore').write_text('/.local/agent/workers/\n/.local/agent/queue/\n'
@@ -280,7 +280,7 @@ class QueueCLITests(unittest.TestCase):
                 args = self.checkpoint_fixture(stage=local_stage, commit='a'*40)
                 args.stage = next_stage
                 result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'a'*40,
-                                      '--stage', 'accepted', '--evidence', 'synthetic')
+                                      '--stage', 'accepted', '--evidence', '单元测试命令 pytest tests/test_app.py 退出码 0')
                 self.assertEqual(result.returncode, 0, result.stderr)
                 state = self.root / '.local/agent/delivery/3.json'
                 before = state.read_bytes()
@@ -307,7 +307,7 @@ class QueueCLITests(unittest.TestCase):
         from pda.transaction import InstallError
         args = self.retry_fixture()
         result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'b'*40,
-                              '--stage', 'accepted', '--evidence', 'old completed proof')
+                              '--stage', 'accepted', '--evidence', '单元测试命令 pytest tests/test_app.py 退出码 0')
         self.assertEqual(result.returncode, 0, result.stderr)
         state = self.root / '.local/agent/delivery/3.json'; before = state.read_bytes()
         base = '/.local/agent/workers/\n/.local/agent/queue/\n'
@@ -326,7 +326,7 @@ class QueueCLITests(unittest.TestCase):
         from pda.transaction import InstallError
         args = self.retry_fixture()
         result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'b'*40,
-                              '--stage', 'accepted', '--evidence', 'old completed proof')
+                              '--stage', 'accepted', '--evidence', '单元测试命令 pytest tests/test_app.py 退出码 0')
         self.assertEqual(result.returncode, 0, result.stderr)
         state = self.root / '.local/agent/delivery/3.json'; before = state.read_bytes()
         subprocess.run(['git','-C',str(self.root),'add','-f',str(state)],check=True,capture_output=True)
@@ -341,7 +341,7 @@ class QueueCLITests(unittest.TestCase):
         from pda.worker_dispatch import dispatch
         args = self.retry_fixture()
         result = self.run_cli('delivery-record', '--issue', '3', '--commit', 'b'*40,
-                              '--stage', 'accepted', '--evidence', 'old completed proof')
+                              '--stage', 'accepted', '--evidence', '单元测试命令 pytest tests/test_app.py 退出码 0')
         self.assertEqual(result.returncode, 0, result.stderr)
         (self.root / '.gitignore').write_text('/.local/agent/workers/\n/.local/agent/queue/\n'
             '/.local/agent/delivery/*.json\n/.local/agent/delivery/write.lock\n')

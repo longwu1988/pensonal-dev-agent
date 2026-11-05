@@ -6,10 +6,10 @@
 | --- | --- | --- |
 | 未完成的需求/领域澄清 | Matt Pocock grilling | 只处理尚未确认决策；已有阶段证据直接移交 |
 | Bug 根因定位 | Superpowers systematic-debugging | 核对实际正文与依赖，使用一个调试主流程 |
-| 实现测试循环 | Superpowers test-driven-development | 仅 Agent 测试模式按任务范围执行；用户明确自测时不运行，不另叠加 Matt tdd |
-| 最终结果核验 | Superpowers verification-before-completion | 按测试责任读取命令证据或用户验收确认，不把用户测试模式变成自动测试，不代替独立审查 |
+| 实现测试循环 | Superpowers test-driven-development | 仅 Agent 测试模式按任务范围执行；范围为受影响代码的单元测试，不包含构建或整体运行验收。用户明确自测时不运行，不另叠加 Matt tdd |
+| 最终结果核验 | Superpowers verification-before-completion | 按测试责任读取单元测试命令证据或用户对应该提交的确认；构建与整体验收留给用户，不把未执行的构建记为通过，也不代替独立审查 |
 | 规格记录 | OpenSpec CLI/宿主入口 | 读取工程 config，按工程指定产物归属保存 |
-| 新页面、新弹窗或视觉改版 | Figma MCP | 按[原型与确认流程](ui-design.md)核对用户选择、默认策略到期采用或明确豁免；实际授权与连接可用，按宿主必需技能操作 |
+| 新页面、新弹窗或视觉改版 | Figma MCP | 调用前按[界面一致性、原型与确认流程](ui-design.md)取得并传递现行视觉依据，再核对版本选择或明确豁免；实际授权与连接可用，按宿主必需技能操作 |
 
 读取实际候选技能及它引用的依赖后才决定调用。本版 doctor 的入口摘要匹配只说明一个文件相同，不能证明完整依赖已固定或行为兼容；候选组合仍待场景验收。
 

@@ -46,9 +46,17 @@ class Lease:
     def contains(self, commit, branch): return self.merged
 
 
+def stage_evidence(stage):
+    if stage == 'accepted':
+        return '单元测试命令 pytest tests/test_app.py 退出码 0'
+    if stage == 'integration_verified':
+        return '单元测试仍覆盖该代码树。构建验收留给用户。'
+    return 'synthetic ' + stage
+
+
 def delivery_ready(root, tracker, number=1):
     for stage in DELIVERY_STEPS:
-        Delivery(root, tracker.repository, 'main').record(number, 'a'*40, stage, 'synthetic ' + stage)
+        Delivery(root, tracker.repository, 'main').record(number, 'a'*40, stage, stage_evidence(stage))
 
 
 class QueueTests(unittest.TestCase):

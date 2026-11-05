@@ -381,6 +381,24 @@ class Queue:
 
 DELIVERY_DIRECTORY = '.local/agent/delivery'
 DELIVERY_STEPS = ('accepted', 'integration_verified', 'remote_synced', 'environment_restored', 'issue_updated')
+_UNIT_TEST_LOCATOR = re.compile(
+    r'单元测试命令|pytest|go test|npm test|pnpm test|yarn test|cargo test|mvn test|gradle test|ctest|python3 -m unittest|用户确认')
+_SKIPPED_TEST = re.compile(r'不适用|not applicable|(?<![A-Za-z])N/A(?![A-Za-z])', re.I)
+UNIT_TEST_DEFERRED = '无单元测试，留给用户验收'
+INTEGRATION_NOTE = 'integration_verified 只表示单元测试仍覆盖即将合入的代码树，不是构建验收。'
+
+
+def validate_stage_evidence(stage, evidence):
+    """Reject placeholders. This does not run tests or judge that the locator is true."""
+    text = evidence.strip()
+    if stage == 'accepted':
+        if _SKIPPED_TEST.search(text):
+            raise InstallError('skipped unit tests must say ' + UNIT_TEST_DEFERRED)
+        if UNIT_TEST_DEFERRED not in text and not _UNIT_TEST_LOCATOR.search(text):
+            raise InstallError('accepted evidence must locate the unit-test command and result, name 用户确认, or say ' + UNIT_TEST_DEFERRED)
+    elif stage == 'integration_verified':
+        if '单元测试' not in text or '构建验收留给用户' not in text:
+            raise InstallError('integration_verified must say the unit-test tree still matches and 构建验收留给用户')
 
 
 class Delivery:
@@ -444,6 +462,7 @@ class Delivery:
             raise InstallError('unknown delivery stage')
         if not isinstance(evidence, str) or not evidence.strip() or not evidence.isprintable() or len(evidence) > 1000:
             raise InstallError('evidence locator required; never store credentials or issue bodies')
+        validate_stage_evidence(stage, evidence)
         with self._locked():
             old = self.status(number)['record']
             if old is None or old['commit'] != commit:
@@ -463,7 +482,10 @@ class Delivery:
                 value['steps'][stage] = evidence
                 value.update(waiting=None, last_verified=None)
             self._save(number, value)
-            return self.status(number)
+            result = self.status(number)
+            if stage == 'integration_verified':
+                result = dict(result, integration_verified_means=INTEGRATION_NOTE)
+            return result
 
     def check(self, number, commit, tracker, lease):
         with self._locked():

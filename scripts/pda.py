@@ -16,7 +16,7 @@ def main():
                                          'queue-start', 'queue-stop', 'queue-status', 'queue-next', 'queue-claim',
                                          'queue-resource-acquire', 'queue-resource-release', 'queue-legacy-stop', 'queue-transfer',
                                          'queue-guard', 'queue-cleanup-guard', 'queue-checkpoint', 'queue-block', 'queue-retry', 'queue-finish',
-                                         'delivery-status', 'delivery-record', 'delivery-check',
+                                         'delivery-status', 'delivery-record', 'delivery-check', 'task-next',
                                          'watch-start', 'watch-bind', 'watch-tick', 'watch-stop', 'watch-status'))
     parser.add_argument('--project', required=True, type=Path)
     parser.add_argument('--apply', action='store_true', help='apply previewed init/recover/update or queue-start/watch-start/queue-transfer/permissions-grant/permissions-revoke changes')
@@ -42,17 +42,17 @@ def main():
     parser.add_argument('--capability', help='comma-separated capabilities to check')
     args = parser.parse_args()
     queue_fields = {'thread': ('watch-start', 'watch-tick'), 'scheduler': ('watch-bind', 'watch-tick'),
-                    'generation': ('watch-bind', 'watch-tick'), 'interval': ('watch-start',), 'owner': ('permissions-status','permissions-grant','permissions-revoke','permissions-check','queue-start','queue-next','queue-guard','queue-cleanup-guard','queue-checkpoint','queue-block','queue-retry','queue-finish','queue-status','queue-stop','queue-claim','queue-resource-acquire','queue-resource-release','queue-transfer'),
+                    'generation': ('watch-bind', 'watch-tick'), 'interval': ('watch-start',), 'owner': ('permissions-status','permissions-grant','permissions-revoke','permissions-check','queue-start','queue-next','queue-guard','queue-cleanup-guard','queue-checkpoint','queue-block','queue-retry','queue-finish','queue-status','queue-stop','queue-claim','queue-resource-acquire','queue-resource-release','queue-transfer','task-next'),
                     'stage': ('queue-checkpoint', 'delivery-record'), 'branch': ('queue-checkpoint',),
                     'worktree': ('queue-checkpoint',), 'commit': ('queue-checkpoint','queue-finish','delivery-record','delivery-check'),
-                    'reason': ('queue-block',), 'issue': ('permissions-grant','permissions-revoke','permissions-check','queue-start','queue-claim','queue-retry','delivery-status','delivery-record','delivery-check'),
+                    'reason': ('queue-block',), 'issue': ('permissions-grant','permissions-revoke','permissions-check','queue-start','queue-claim','queue-retry','delivery-status','delivery-record','delivery-check','task-next'),
                     'evidence': ('permissions-grant','permissions-revoke','queue-finish','delivery-record','queue-transfer'), 'target_owner': ('queue-transfer',),
                     'resource': ('queue-resource-acquire','queue-resource-release'),
                     'allow': ('permissions-grant',), 'deny': ('permissions-grant',), 'capability': ('permissions-check',)}
     for field, actions in queue_fields.items():
         if getattr(args, field) is not None and args.action not in actions:
             parser.error('--' + field + ' is not valid for this action')
-    if args.action in queue_fields['owner'] and args.action not in ('queue-status','queue-stop') and not args.owner:
+    if args.action in queue_fields['owner'] and args.action not in ('queue-status','queue-stop','task-next') and not args.owner:
         parser.error('--owner is required for this workflow action')
     if args.all and (args.action != 'queue-stop' or args.owner):
         parser.error('--all requires queue-stop without --owner')
@@ -77,6 +77,10 @@ def main():
         if args.action == 'notify-question':
             from pda.notifications import notify
             print(json.dumps(notify(package), ensure_ascii=False, indent=2))
+            return 0
+        if args.action == 'task-next':
+            from pda.task_next import task_next
+            print(json.dumps(task_next(root, args.owner, args.issue), ensure_ascii=False, indent=2))
             return 0
         if args.action.startswith('watch-'):
             from pda.issue_watch import dispatch
