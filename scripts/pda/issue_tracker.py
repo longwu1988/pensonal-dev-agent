@@ -240,6 +240,11 @@ class Tracker:
             if not value:
                 return records
             records.extend(value)
+            # Gitea comment pages end when a page is shorter than the limit.
+            # The following request is not a reliable empty page.
+            if (self.kind == 'gitea' and suffix.endswith('/comments')
+                    and len(value) < PAGE_SIZE):
+                return records
         raise InstallError('issue tracker pagination limit exceeded')
 
     def issues(self):
