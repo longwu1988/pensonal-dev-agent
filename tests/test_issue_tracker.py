@@ -129,9 +129,11 @@ class TrackerTests(unittest.TestCase):
                                  ('github', 'https://github.com/team/repo')]:
             with self.subTest(kind=kind):
                 tracker = self.tracker(kind, repository)
-                result, _ = self.run_responses(tracker,
-                    [{'number': 17, 'pull_request': None}, [{'body': 'Full discussion'}], []],
-                    lambda: tracker.issue(17))
+                # Gitea stops after a short comment page; GitHub still reads the empty page.
+                pages = [{'number': 17, 'pull_request': None}, [{'body': 'Full discussion'}]]
+                if kind == 'github':
+                    pages.append([])
+                result, _ = self.run_responses(tracker, pages, lambda: tracker.issue(17))
                 self.assertEqual(result['comments_data'], [{'body': 'Full discussion'}])
                 for marker in ({}, {'url': 'https://git.example/pr/17'}):
                     with self.assertRaises(InstallError):
@@ -149,14 +151,29 @@ class TrackerTests(unittest.TestCase):
                     {'id': 12, 'body': '<img src="/attachments/revised.png" alt="new screen">'},
                     {'id': 13, 'body': 'Changed scope ![detail][shot]\n\n[shot]: https://images.example/detail.png',
                      'updated_at': '2026-01-02T00:00:00Z'}]
-                result, requests = self.run_responses(tracker,
-                    [{'number': 7, 'body': body}, *[[item] for item in comments], []],
-                    lambda: tracker.issue(7))
+                if kind == 'gitea':
+                    payloads = [{'number': 7, 'body': body}, comments]
+                    expected_pages = ['1']
+                else:
+                    payloads = [{'number': 7, 'body': body}, *[[item] for item in comments], []]
+                    expected_pages = ['1', '2', '3', '4']
+                result, requests = self.run_responses(tracker, payloads, lambda: tracker.issue(7))
                 self.assertEqual(result['body'], body)
                 self.assertEqual(result['comments_data'], comments)
                 pages = [parse_qs(urlsplit(r.full_url).query)['page'][0] for r in requests[1:]]
-                self.assertEqual(pages, ['1', '2', '3', '4'])
+                self.assertEqual(expected_pages, pages)
                 self.assertTrue(all('/attachments/' not in r.full_url for r in requests))
+
+    def test_gitea_comment_short_page_ends_without_another_request(self):
+        tracker = self.tracker()
+        full = [{'id': index, 'body': 'page'} for index in range(issue_tracker.PAGE_SIZE)]
+        last = [{'id': 1000, 'body': 'tail'}]
+        result, requests = self.run_responses(tracker, [
+            {'number': 7, 'pull_request': None}, full, last,
+        ], lambda: tracker.issue(7))
+        self.assertEqual(result['comments_data'], full + last)
+        pages = [parse_qs(urlsplit(request.full_url).query)['page'][0] for request in requests[1:]]
+        self.assertEqual(pages, ['1', '2'])
 
     def test_github_detail_includes_all_comments_and_ignores_remote_urls(self):
         tracker = self.tracker('github', 'git@github.com:team/repo.git')

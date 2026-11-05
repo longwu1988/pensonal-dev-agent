@@ -64,7 +64,7 @@ python3 scripts/pda.py doctor --project /path/to/project
 
 版本固定到 `longwu1988/pensonal-dev-agent` 的 main 完整 commit。开发分支领先 main 时报告 ahead；分叉报告 diverged，不自动降级。检查失败继续本地工作，可显式 `--force` 重查。GitHub 公开 API 无账号依赖但有请求限额，网络和限额问题均不阻塞业务任务；本工具不改 Git 全局配置或自动配置代理。
 
-update 默认下载到系统临时目录并预览，只有 `--apply` 写入。当前本地运行时负责安装，不执行下载的 Python；校验固定提交的 Git blob 摘要、常规文件路径、体积和协议，临时下载退出即清理。本版新增 `permissions.py`，保留工单占用运行时及固定语音资源，当前更新协议为 6。协议 1/2/3/4/5 updater 会拒绝不完整更新，需要从审阅过、固定提交的完整源码再执行一次 `init` 预览和 `init --apply`；保留已有 project.json、区外规则、权限、queue/workers/delivery/watch 状态及本地 permissions 授权记录，不删除 lock 绕过冲突。已有持续任务升级前先停止本地模式和宿主调度并保存检查点，升级后用户明确继续才重新绑定。迁移或恢复中断时使用完整协议 6 源码执行 `python3 scripts/pda.py recover --project /path/to/project --apply`，旧事务模块不识别新增文件，不能依赖半更新的入口。后续协议 6 兼容更新可用工程内 updater。
+update 默认下载到系统临时目录并预览，只有 `--apply` 写入。当前本地运行时负责安装，不执行下载的 Python；校验固定提交的 Git blob 摘要、常规文件路径、体积和协议，临时下载退出即清理。本版新增 `permissions.py`，保留工单占用运行时及固定语音资源，当前更新协议为 6。协议 1/2/3/4/5 updater 会拒绝不完整更新，需要从审阅过、固定提交的完整源码再执行一次 `init` 预览和 `init --apply`；保留已有 project.json、区外规则、权限、queue/workers/delivery/watch 状态及本地 permissions 授权记录，不删除 lock 绕过冲突。已有持续任务升级前先停止本地模式和宿主调度并保存检查点，升级后用户明确继续才重新绑定。迁移或恢复中断时使用完整协议 6 源码执行 `python3 scripts/pda.py recover --project /path/to/project --apply`，旧事务模块不识别新增文件，不能依赖半更新的入口。协议 6 工程内 updater 只安装它已经认识的运行时文件。候选新增 `scripts/pda/*.py` 时，已安装的 updater 会在下载阶段拒绝，需要用该提交的完整源码再执行一次 `init` 预览和 `init --apply`。没有新增运行时文件的协议 6 更新仍可用工程内 updater。
 
 安装事务包含运行时和来源记录，因此 recover 会同时恢复版本；它不会恢复提醒偏好、队列或工单收尾状态。更新期间 main 前进不改变用户选定候选，工程配置继续由工程维护。应用后新任务加载新规则，宿主自动发现、热重载及跨工具会话仍需单独验收。安装 runtime 提供更新检查、更新选择、恢复、队列控制、工单收尾检查及本地固定语音播放；init 和 doctor 仍从完整源码目录调用。
 
