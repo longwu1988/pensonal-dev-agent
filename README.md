@@ -11,7 +11,7 @@
 - 首个试点工程：`zkxw`。
 - 第一版目标工具：Codex、Cursor；Claude 暂不纳入实施和验收。两端适配均待验证。
 - `scripts/pda.py` 提供预览、安装、只读检查和恢复；使用 Python 3.9+ 标准库，目前验证 macOS，Linux 尚未实测，Windows 不支持。
-- 确认问题默认触发[本地语音提醒](skills/personal-dev/references/question-notification.md)，使用预生成固定音频；macOS 提供 `notify-question`，安装本身不播放，也不替代文字答复或审批。
+- 确认问题默认触发[本地语音提醒](skills/personal-dev/references/question-notification.md)，使用预生成固定音频；macOS 提供 `notify-question`，安装本身不播放，也不替代文字答复或审批。Cursor 等「工具先于正文」宿主须将播音作为本轮最后一次工具，并以「待你确认」清单为主体停手；可选工程适配模板见 [host-cursor-question-visibility.md](docs/host-cursor-question-visibility.md)。
 - 完整安装额外提供按工程检查 main 更新、稍后提醒、跳过版本及固定提交升级；由新任务入口调用，没有后台调度或宿主启动钩子。用法与边界见 [更新说明](docs/installation.md#按工程检查与选择更新)。
 - [一分钟推荐选择](skills/personal-dev/references/planning.md#提问推荐与一分钟默认选择)默认启用，无需逐工程另行开启；保留用户明确关闭及必须等待的约束，不新增外部操作授权或后台计时服务。
 - 正式需求和 Bug [默认通过 PR 合并](skills/personal-dev/references/pull-requests.md)，保留工程明确的直接合并选择；由 Agent 调用平台工具执行，现有 CLI 不自动操作或核验 PR。
@@ -40,6 +40,7 @@
 | 最小接入实现与验证 | [阶段 2](openspec/changes/development-system-v0-1/implementation.md) |
 | 持续处理未来新增工单 | [持续检查变更](openspec/changes/continuous-issue-watch/proposal.md) |
 | 用户控制的工单队列 | [队列变更](openspec/changes/issue-queue/proposal.md) |
+| 任务分级与 Figma 门禁 | [任务分级变更](openspec/changes/task-level-routing/proposal.md) |
 
 以上是完整体系的目标要求，部分已由最小接入实现；尚未完成全部验收，不归档为已交付的长期规范。
 

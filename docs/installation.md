@@ -29,7 +29,7 @@ python3 scripts/pda.py doctor --project /path/to/project
 | 工程位置 | 归属与行为 |
 | --- | --- |
 | `.agents/skills/personal-dev/` | 安装器管理的唯一 Skill 内容，含分层流程、角色和 scripts 更新、队列及工单收尾运行时 |
-| `.cursor/rules/personal-dev.mdc` | 安装器管理的 Cursor 入口，只指向共享规则 |
+| `.cursor/rules/personal-dev.mdc` | 安装器管理的 Cursor 入口；含确认可见性要点，并在工程存在时指向 `docs/agents/cursor-question-visibility.md` |
 | 根 `AGENTS.md`、`.gitignore` | 仅维护 personal-dev 标记区；区外原始字节保留 |
 | `docs/agents/README.md` | 使用指南、对话示例及配置字段说明，安装器管理 |
 | `docs/agents/project.json` | 工程自行维护；只在不存在时生成，升级保留 |
@@ -41,6 +41,8 @@ python3 scripts/pda.py doctor --project /path/to/project
 | `.local/agent/watch/` | 持续授权、宿主调度绑定及下一检查时间；本机私有，不随 Git 同步 |
 | `.local/agent/workers/<owner>/` | 按会话隔离的状态、停止令牌与本机锁；不提交，不随 Git 同步 |
 | `.local/agent/queue/` | 旧版队列状态、全局停止令牌与恢复信息；不提交，不随 Git 同步 |
+
+可选宿主适配：源码中的 [Cursor 确认可见性模板](host-cursor-question-visibility.md) 不写入上述清单。需要工程内全文时，复制为 `docs/agents/cursor-question-visibility.md` 并由工程规则引用；升级不会覆盖该文件。通用「工具先于正文」条款已在受管 Skill 的 planning / question-notification 中。
 
 现有应用、MCP、OpenSpec 配置、上游 skills 与业务文件不在本安装器的写入清单内。应用映射从直接子目录的 AGENTS 发现，需人工核对补充；集成分支、仓库、验证命令及环境不猜测。
 
