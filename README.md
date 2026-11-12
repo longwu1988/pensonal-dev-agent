@@ -41,6 +41,9 @@
 | 持续处理未来新增工单 | [持续检查变更](openspec/changes/continuous-issue-watch/proposal.md) |
 | 用户控制的工单队列 | [队列变更](openspec/changes/issue-queue/proposal.md) |
 | 任务分级与 Figma 门禁 | [任务分级变更](openspec/changes/task-level-routing/proposal.md) |
+| 思路分析与可诊断调整点 | [分析沉淀](docs/agent-system-analysis.md) |
+| 阶段 3 最小宿主验收剧本 | [宿主端到端剧本](docs/stage3-host-acceptance.md)（草稿；未跑实机不算阶段 3 完成） |
+| P0 CLI 硬化选型 | [硬化候选](docs/cli-hardening-candidates.md)（选型草案；尚未改运行时） |
 
 以上是完整体系的目标要求，部分已由最小接入实现；尚未完成全部验收，不归档为已交付的长期规范。
 
