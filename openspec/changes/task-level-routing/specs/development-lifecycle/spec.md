@@ -2,7 +2,7 @@
 
 ### Requirement: 任务先分级再加载流程
 
-体系 SHALL 在读取完整开发流程表之前，按 [任务级别与加载预算](../../../../../skills/personal-dev/references/task-levels.md) 判定 L0、L1 或 L2，并只加载该级允许的引用。
+体系 SHALL 在读取完整开发流程表之前，先按 [题型剧本](../../../../../skills/personal-dev/references/playbooks.md) 判定剧本，再落到 [任务级别与加载预算](../../../../../skills/personal-dev/references/task-levels.md) 的 L0、L1 或 L2，并只加载该剧本与该级允许的引用。
 
 #### Scenario: L0 概念咨询
 - **WHEN** 用户仅要求解释、定位或对比方案，且不修改仓库、不交付工单
@@ -10,15 +10,23 @@
 
 #### Scenario: L1 明确单点小改
 - **WHEN** 范围明确的文案、配置、局部逻辑或有同端同类参考的界面微调，且不改业务规则、跨模块 API 或架构
-- **THEN** 走实施轻量路径：影响检查与最小验证；不建 OpenSpec 全套；用户未要求交付时不自动跑完整交付链。
+- **THEN** 走 `implementation-l1` 轻量路径：影响检查与最小验证；不建 OpenSpec 全套；不读 L2 implementation 全文；跳过新任务版本检查；用户未要求交付时不自动跑完整交付链。
+
+#### Scenario: 带编号局部 Bug 短剧本
+- **WHEN** 用户给出工单编号且任务是恢复既有行为的局部缺陷、非新能力
+- **THEN** 使用 P-bug：领取后按 L1 预算读工单与 implementation-l1；不默认完整交付链；跳过新任务版本检查。
+
+#### Scenario: 仅交付续接
+- **WHEN** 实现已完成，用户只要求提交、PR、合并或关单
+- **THEN** 使用 P-deliver：只加载收尾相关引用，不重做实现与规格访谈。
 
 #### Scenario: L2 正式开发交付
 - **WHEN** 新能力、跨模块、规则或 API 变化、空白工程或技术栈变化、正式工单开发交付，或用户要求完整流程
-- **THEN** 沿用正式实施 → 测试 → 交付主链，并按需加载对应引用。
+- **THEN** 沿用正式实施 → 测试 → 交付主链，并按需加载对应引用；新任务可做版本检查。
 
 #### Scenario: 执行中上调级别
 - **WHEN** L1 进行中发现跨端范围、规则或 API 变化、无可用界面参考或验收不清
-- **THEN** 升到 L2 或触发 Figma 门禁，简短告知用户；不因赶时间下调级别。
+- **THEN** 升到 L2 / P-feature 或触发 Figma 门禁，简短告知用户；不因赶时间下调级别。
 
 ## MODIFIED Requirements
 

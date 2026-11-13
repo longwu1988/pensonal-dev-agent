@@ -29,7 +29,7 @@
 3. **工程配置承载差异** — `docs/agents/project.json`；通用 Skill 不写死试点路径或分支。
 4. **结构按能力逐步建立** — `profiles/core.json` 仍为 `candidate-not-behavior-verified`。
 
-近期补丁（2026-11）：[任务分级](../skills/personal-dev/references/task-levels.md)压 token；Figma 门禁替代「简单也要原型」；Cursor「待你确认」+ 末次工具修「只闻声不见题」。
+近期补丁（2026-11）：[任务分级](../skills/personal-dev/references/task-levels.md)压 token；[题型剧本](../skills/personal-dev/references/playbooks.md)按问题类型设硬加载上限，L1 实施与 L2 文件切开；Figma 门禁替代「简单也要原型」；Cursor「待你确认」+ 末次工具修「只闻声不见题」。
 
 ## 3. 运行时画像
 
@@ -69,7 +69,7 @@
 
 | 点 | 信号 | 先查 | 可调 |
 | --- | --- | --- | --- |
-| D. 加载预算 | 咨询也读全 Skill；小修走 OpenSpec/Figma | 显式 L0/L1/L2；实际打开的 references | 强化 adapter；L0 禁止清单 |
+| D. 加载预算 | 咨询也读全 Skill；小修走 OpenSpec/Figma | 题型剧本 + L0/L1/L2；实际打开的 references 是否超出上限 | 强化 adapter；短剧本白名单；后续可考虑 CLI `route` 返回强制 read 列表 |
 | E. 一分钟边界 | 沉默当验收/授权 | 题型、发送时间、停止优先 | 超时不授权限；不可计时则必须等待 |
 | F. Figma 门禁 | 有参考仍原型 / 无参考直写 | 同端参考依据；免除是否用户明确 | 按 2026-11-11 现行门禁；勿读作废 behavior 节 |
 | G. 权限双重门禁 | guard 过了仍失败；deny 被工程 true 盖 | permissions-check；deny 优先 | 「守卫 ≠ 授权」短检查；写入前重读 |
@@ -106,5 +106,6 @@
 - [design.md](../openspec/changes/development-system-v0-1/design.md)
 - [SKILL.md](../skills/personal-dev/SKILL.md)
 - [task-levels.md](../skills/personal-dev/references/task-levels.md)
+- [playbooks.md](../skills/personal-dev/references/playbooks.md)
 - [behavior.md](../tests/behavior.md)
 - [profiles/core.json](../profiles/core.json)

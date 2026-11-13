@@ -1,6 +1,6 @@
 # 版本检查与更新选择
 
-完整安装的工程在新任务首次使用个人 Agent 时，从工程根目录执行：
+完整安装的工程在 **P-feature / L2** 新任务首次使用个人 Agent 时，从工程根目录执行（[短剧本](playbooks.md)跳过本检查）：
 
 ```sh
 python3 .agents/skills/personal-dev/scripts/pda.py check-update --project .

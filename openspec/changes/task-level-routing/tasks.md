@@ -5,4 +5,5 @@
 - [x] 改 ui-design.md：Figma 门禁
 - [x] 改 implementation / roles / planning：L1 短路径与一分钟范围
 - [x] 本变更 proposal/design/spec 与行为案例
-- [ ] 试点工程真实会话观察 L0/L1 token 与 Figma 分流（未在本轮完成）
+- [x] 新增 playbooks.md 与 implementation-l1.md；入口改为先题型再加载；短剧本跳过版本检查
+- [ ] 试点工程真实会话观察 L0/L1 token 与 Figma / 题型分流（未在本轮完成）

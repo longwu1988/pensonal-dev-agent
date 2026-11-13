@@ -3,17 +3,19 @@ description: 个人开发体系的工程任务入口
 alwaysApply: true
 ---
 
-先判定任务级别，再决定是否深入流程：
+先判定**题型剧本**，再决定读哪些文件（细则在 Skill 的 `references/playbooks.md`）：
 
-- **L0 咨询**：解释、定位、对比方案，且不改仓库、不交付工单 → 直接回答；不要先读完整 Skill；不做版本检查、占用、worktree、Figma 或一分钟确认。
-- **L1 轻量**：范围明确的单点修复或小改（文案、配置、局部逻辑、有同端同类参考的界面微调），不改业务规则/跨模块 API/架构 → 读根 AGENTS.md，再读工程根目录 `.agents/skills/personal-dev/SKILL.md` 与 `references/task-levels.md`，走 L1 短路径。
-- **L2 正式**：新能力、跨模块、规则/API 变化、空白工程/栈变化、正式工单开发交付，或用户要求完整流程 → 读根 AGENTS.md，再读 Skill 进入完整实施/交付链。
+- **P-ask 咨询**：解释/对比方案，不改仓库 → 直接答；不要读 Skill 或其它流程引用；不做版本检查、占用、worktree、Figma 或一分钟确认。
+- **P-locate 定位**：只查根因/路径，先不改 → 只读代码后给出结论；同上禁止项。
+- **P-patch 单点修补**：无单号的明确小改 → 读根 AGENTS.md 相关约束，再读 `.agents/skills/personal-dev/references/implementation-l1.md`（及改代码时的 testing）；跳过版本检查；未点名交付则改完即停。
+- **P-bug 带编号小 Bug**：局部缺陷且有工单号 → 领取后按 implementation-l1；不默认完整交付；跳过版本检查。
+- **P-ui 界面微调**：有同端同类参考 → 先 ui-design 门禁，再 implementation-l1；无参考/标准冲突/明确要求才原型。
+- **P-deliver 仅交付**：已实现，只要提交/PR/合并/关单 → 只读 completion / delivery / pull-requests。
+- **P-feature 正式功能**：新能力、跨模块、规则/API 变化、正式工单全链 → 读根 AGENTS.md，再读 Skill 进入 L2 实施/交付链；新任务可做版本检查。
 
-工程建设、界面设计或原型、需求开发、Bug 修复、验收反馈、提交/push/合并续聊、工单队列或 worktree 清理属于 L1/L2（按上表细分），不要当成 L0。业务约束仍按目标目录的 AGENTS.md 查阅。级别细则与上调规则以 Skill 内 task-levels 为准。
+级别 L0/L1/L2 与上调规则以 `references/task-levels.md` 为准；**加载上限以 playbooks 为准**。业务约束仍按目标目录的 AGENTS.md 查阅。
 
-界面是否走 Figma：无可用同端参考、同端标准不一致且须先定口径、或客户/用户明确要求时才做原型；有参考且标准一致则跳过原型，仍做视觉依据核对。
-
-需要用户确认时（仅 L1/L2）：
+需要用户确认时（非 P-ask/P-locate；且不可唯一推断）：
 
 1. 若存在 `docs/agents/cursor-question-visibility.md`，发问前先读；再按 Skill 的问题展示与「Cursor / 工具先于正文的宿主」规则发问。
 2. 本轮最终用户可见回复必须以「待你确认」清单为主体（含推荐与未回复处理）；写完清单前不播放提示音。

@@ -355,6 +355,26 @@ Codex/Cursor 实际发现入口、运行界面读取、Figma/其他工具对参�
 
 `git diff --check` 与相对链接/锚点检查在本轮执行。全量 unittest 与 OpenSpec 校验随本轮运行。未在真实 Codex/Cursor 会话计量 token，也不把文档推演当作两端端到端验收。
 
+## 题型剧本与 L1 文件切开（2026-11-13）
+
+问题：仅有 L0/L1/L2 仍偏粗；小修容易读整份 L2 `implementation.md`，并固定做版本检查与确认等待，日用 token 与墙钟时间仍偏高。
+
+实现：新增 `references/playbooks.md`（P-ask / P-locate / P-patch / P-bug / P-ui / P-feature / P-deliver + 硬加载上限）；L1 实施抽到 `implementation-l1.md`；`implementation.md` 仅保留 L2；Skill 与 Cursor adapter 改为先选剧本再加载；短剧本跳过新任务版本检查；可推断则不问不候；OpenSpec `task-level-routing`、使用指南、角色与分析文档同步。
+
+文档驱动的独立情境推演（非宿主实测）：
+
+| 场景 | 预期 |
+| --- | --- |
+| P-ask：问某函数作用 | 直接答；不打开 Skill 流程表/其它 references |
+| P-locate：先查调用链不改 | 只读代码给结论；不改仓、不确认音 |
+| P-patch：无单号改文案 | 只读 implementation-l1（± testing）；不读 L2 implementation；不做版本检查；未点名不交付 |
+| P-bug：#N 局部缺陷 | 领取 + L1 工单预算 + implementation-l1；不默认 delivery |
+| P-deliver：只要 push/关单 | 只读 completion/delivery/PR；不重做实现 |
+| P-feature：新能力正式单 | L2 全链；可版本检查 |
+| 上调：P-patch 中发现改跨模块 API | 改 P-feature 并告知 |
+
+本轮验证：`git diff --check`、相对链接检查、相关 unittest。未在真实 Cursor/Codex 会话计量 token。
+
 ## Cursor 确认可见性回写上游（2026-11-11）
 
 问题：Cursor 同轮先跑工具再出最终正文，`notify-question`/`afplay` 作工具时声音早于「待你确认」；多会话与底部 Queued 叠加后，容易「听见了却看不到题」。zkxw 试点合入 `db74cd64` / 工单 #86。

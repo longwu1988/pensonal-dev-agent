@@ -6,11 +6,12 @@
 
 ## Decisions
 
-1. **三级路由写进唯一引用** `skills/personal-dev/references/task-levels.md`；入口与 adapter 只留摘要，避免复制整表。
-2. **先分级再加载**：L0 不读流程表、不做版本检查；L1/L2 才读配置与按级引用。
+1. **三级路由写进** `skills/personal-dev/references/task-levels.md`；**日用加载清单写进** `playbooks.md`；入口与 adapter 只留摘要，避免复制整表。
+2. **先选剧本再分级再加载**：L0 不读流程表、不做版本检查；L1 短剧本只读 `implementation-l1.md` 及剧本白名单，并跳过新任务版本检查；仅 P-feature/L2 走完整配置与版本检查。
 3. **Figma 门禁基于证据**：先做视觉依据中的同类参考核对，再判定是否原型；“简单”不再作为免除或强制的唯一条件。
-4. **上调不可因催促下调**：发现跨端、规则/API 变化或无参考时升 L2 / 触发 Figma；“赶时间”不降级。
-5. **不改占用与交付协议**：正式 L2 单仍领取与 PR 默认路径；L1 仅在用户要求交付时进入收尾。
+4. **上调不可因催促下调**：发现跨端、规则/API 变化或无参考时升 L2 / `P-feature` / 触发 Figma；“赶时间”不降级。
+5. **不改占用与交付协议**：正式 L2 单仍领取与 PR 默认路径；L1 仅在用户要求交付时进入 `P-deliver` 收尾。
+6. **物理切开 L1 短路径**：避免 Agent 为小修打开整份 L2 `implementation.md`。
 
 ## Risks
 
